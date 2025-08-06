@@ -295,4 +295,65 @@ function endDayPhase(room) {
 
     if (mostVoted) {
         const victim = r.players.find(p => p.id === mostVoted);
-        if
+        if (victim) {
+            victim.alive = false;
+            r.victims.push(victim);
+
+            // Allen Spielern das Opfer mitteilen
+            io.to(room).emit("announceVictim", {
+                id: victim.id,
+                name: victim.name,
+                votes: maxVotes
+            });
+
+            // Spielstatus prüfen
+            if (checkGameStatus(room)) {
+                return; // Spiel ist vorbei
+            }
+
+            // Nach 5 Sekunden die nächste Nachtphase starten
+            setTimeout(() => startNightPhase(room), 5000);
+        }
+    }
+}
+
+function checkGameStatus(room) {
+    const r = rooms[room];
+    if (!r) return false;
+
+    const wolves = r.players.filter(p => p.role === "Werwolf" && p.alive);
+    const villagers = r.players.filter(p => p.role === "Dorfbewohner" && p.alive);
+
+    // Werwölfe haben gewonnen, wenn sie gleich viele oder mehr sind als Dorfbewohner
+    if (wolves.length >= villagers.length) {
+        endGame(room, "Werwölfe");
+        return true;
+    }
+
+    // Dorfbewohner haben gewonnen, wenn alle Werwölfe tot sind
+    if (wolves.length === 0) {
+        endGame(room, "Dorfbewohner");
+        return true;
+    }
+
+    return false;
+}
+
+function endGame(room, winner) {
+    const r = rooms[room];
+    if (!r) return;
+
+    r.phase = "gameOver";
+    r.started = false;
+    r.readyForNextGame = [];
+
+    io.to(room).emit("gameOver", {
+        winner,
+        players: r.players.map(p => ({
+            id: p.id,
+            name: p.name,
+            role: p.role,
+            alive: p.alive
+        }))
+    });
+}
