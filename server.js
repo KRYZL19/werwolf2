@@ -28,11 +28,19 @@ io.on("connection", (socket) => {
             phase: "lobby",
             wolfVotes: {},
             dayVotes: {},
-            victims: []
+            victims: [],
+            readyForNextGame: []
         };
 
         socket.join(room);
         socket.data.room = room;
+
+        // Rauminfo an den Spieler senden
+        socket.emit("roomInfo", {
+            maxPlayers: rooms[room].maxPlayers,
+            players: rooms[room].players
+        });
+
         io.to(room).emit("updatePlayerList", rooms[room].players.map(p => ({
             id: p.id,
             name: p.name,
@@ -47,7 +55,7 @@ io.on("connection", (socket) => {
             return;
         }
 
-        if (r.started) {
+        if (r.started && !r.readyForNextGame.includes(socket.id)) {
             socket.emit("errorMessage", "Spiel bereits gestartet.");
             return;
         }
@@ -60,6 +68,13 @@ io.on("connection", (socket) => {
         r.players.push({ id: socket.id, name, role: null, alive: true });
         socket.join(room);
         socket.data.room = room;
+
+        // Rauminfo an den Spieler senden
+        socket.emit("roomInfo", {
+            maxPlayers: r.maxPlayers,
+            players: r.players
+        });
+
         io.to(room).emit("updatePlayerList", r.players.map(p => ({
             id: p.id,
             name: p.name,
@@ -153,9 +168,53 @@ io.on("connection", (socket) => {
         }
     });
 
+    socket.on("playAgain", ({ room, name }) => {
+        const r = rooms[room];
+        if (!r) return;
+
+        // Spieler als bereit für nächstes Spiel markieren
+        if (!r.readyForNextGame.includes(socket.id)) {
+            r.readyForNextGame.push(socket.id);
+        }
+
+        // Update anderen Spielern, wer bereit ist
+        io.to(room).emit("updatePlayerList", r.players.filter(p =>
+            r.readyForNextGame.includes(p.id)
+        ).map(p => ({
+            id: p.id,
+            name: p.name,
+            alive: true
+        })));
+
+        // Wenn alle bereit sind und genug für ein Spiel, neues Spiel starten
+        if (r.readyForNextGame.length >= Math.max(5, r.wolves + 3)) {
+            // Spielerliste aktualisieren
+            r.players = r.players.filter(p => r.readyForNextGame.includes(p.id));
+
+            // Spielstatus zurücksetzen
+            r.started = true;
+            r.phase = "lobby";
+            r.wolfVotes = {};
+            r.dayVotes = {};
+            r.victims = [];
+            r.readyForNextGame = [];
+
+            // Spiel starten
+            setTimeout(() => startGame(room), 3000);
+        }
+    });
+
     socket.on("disconnect", () => {
         const room = socket.data.room;
         if (!room || !rooms[room]) return;
+
+        // Spieler aus Ready-Liste entfernen
+        if (rooms[room].readyForNextGame) {
+            const readyIndex = rooms[room].readyForNextGame.indexOf(socket.id);
+            if (readyIndex !== -1) {
+                rooms[room].readyForNextGame.splice(readyIndex, 1);
+            }
+        }
 
         const index = rooms[room].players.findIndex(p => p.id === socket.id);
         if (index !== -1) {
@@ -171,7 +230,7 @@ io.on("connection", (socket) => {
                 delete rooms[room];
             }
             // Spiel beenden, wenn zu wenige Spieler
-            else if (rooms[room].started) {
+            else if (rooms[room].started && rooms[room].phase !== "lobby") {
                 checkGameStatus(room);
             }
         }
@@ -183,11 +242,16 @@ function startGame(room) {
     if (!r) return;
 
     const shuffled = [...r.players].sort(() => Math.random() - 0.5);
-    for (let i = 0; i < r.wolves; i++) {
+
+    // Rollen zuweisen
+    const wolfCount = Math.min(r.wolves, Math.floor(r.players.length / 3));
+    for (let i = 0; i < wolfCount; i++) {
         shuffled[i].role = "Werwolf";
+        shuffled[i].alive = true;
     }
-    for (let i = r.wolves; i < shuffled.length; i++) {
+    for (let i = wolfCount; i < shuffled.length; i++) {
         shuffled[i].role = "Dorfbewohner";
+        shuffled[i].alive = true;
     }
 
     for (const player of shuffled) {
@@ -231,68 +295,4 @@ function endDayPhase(room) {
 
     if (mostVoted) {
         const victim = r.players.find(p => p.id === mostVoted);
-        if (victim) {
-            victim.alive = false;
-            r.victims.push(victim);
-
-            // Allen Spielern das Opfer mitteilen
-            io.to(room).emit("announceVictim", {
-                id: victim.id,
-                name: victim.name,
-                votes: maxVotes
-            });
-
-            // Spielstatus prüfen
-            if (checkGameStatus(room)) {
-                return; // Spiel ist vorbei
-            }
-
-            // Nach 5 Sekunden die nächste Nachtphase starten
-            setTimeout(() => startNightPhase(room), 5000);
-        }
-    }
-}
-
-function checkGameStatus(room) {
-    const r = rooms[room];
-    if (!r) return false;
-
-    const wolves = r.players.filter(p => p.role === "Werwolf" && p.alive);
-    const villagers = r.players.filter(p => p.role === "Dorfbewohner" && p.alive);
-
-    // Werwölfe haben gewonnen, wenn sie gleich viele oder mehr sind als Dorfbewohner
-    if (wolves.length >= villagers.length) {
-        endGame(room, "Werwölfe");
-        return true;
-    }
-
-    // Dorfbewohner haben gewonnen, wenn alle Werwölfe tot sind
-    if (wolves.length === 0) {
-        endGame(room, "Dorfbewohner");
-        return true;
-    }
-
-    return false;
-}
-
-function endGame(room, winner) {
-    const r = rooms[room];
-    if (!r) return;
-
-    r.phase = "gameOver";
-
-    io.to(room).emit("gameOver", {
-        winner,
-        players: r.players.map(p => ({
-            id: p.id,
-            name: p.name,
-            role: p.role,
-            alive: p.alive
-        }))
-    });
-
-    // Raum nach 1 Minute löschen
-    setTimeout(() => {
-        delete rooms[room];
-    }, 60000);
-}
+        if

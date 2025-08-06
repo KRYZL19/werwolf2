@@ -44,7 +44,7 @@
         }
 
         /* Spielelemente */
-        #menu, #game, #roleDisplay, #nightPhase, #dayPhase, #deathAnnouncement {
+        #menu, #game, #roleDisplay, #nightPhase, #dayPhase, #deathAnnouncement, #winAnimation {
             display: none;
             margin-top: 20px;
         }
@@ -88,6 +88,63 @@
             color: black;
         }
 
+        /* Gewinn-Animationen */
+        #winAnimation {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            z-index: 1000;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            pointer-events: none;
+        }
+
+        /* Blut-Animation für Werwolf-Sieg */
+        .blood-animation {
+            background-color: rgba(180, 0, 0, 0.1);
+            animation: bloodPulse 3s ease-in-out forwards;
+        }
+        .blood-splash {
+            position: absolute;
+            background-image: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="100" height="100" viewBox="0 0 100 100"><path fill="rgba(180,0,0,0.7)" d="M50 0 C70 25 90 40 85 65 C80 85 65 95 50 100 C35 95 20 85 15 65 C10 40 30 25 50 0"></path></svg>');
+            background-size: contain;
+            background-repeat: no-repeat;
+            width: 100px;
+            height: 100px;
+            opacity: 0;
+            transform: scale(0);
+        }
+        @keyframes bloodPulse {
+            0% { background-color: rgba(180, 0, 0, 0.1); }
+            50% { background-color: rgba(180, 0, 0, 0.3); }
+            100% { background-color: rgba(180, 0, 0, 0.1); }
+        }
+        @keyframes bloodSplash {
+            0% { opacity: 0; transform: scale(0); }
+            80% { opacity: 0.8; transform: scale(1); }
+            100% { opacity: 0.6; transform: scale(0.9); }
+        }
+
+        /* Konfetti für Dorfbewohner-Sieg */
+        .confetti-container {
+            width: 100%;
+            height: 100%;
+            position: absolute;
+            top: 0;
+            left: 0;
+            overflow: hidden;
+        }
+        .confetti {
+            width: 10px;
+            height: 10px;
+            position: absolute;
+            background-color: #f0f;
+            opacity: 0;
+        }
+
         @media (max-width: 600px) {
             body { padding: 10px; max-width: 100%; }
         }
@@ -119,7 +176,7 @@
 </div>
 
 <div id="game" class="card p-3 shadow-sm mt-3">
-    <h3>Warte auf Mitspieler...</h3>
+    <h3 id="waitingMessage">Warte auf Mitspieler...</h3>
     <p id="playerList"></p>
     <div class="progress mt-2">
         <div id="playerProgress" class="progress-bar" role="progressbar" style="width: 0%"></div>
@@ -165,6 +222,8 @@
     </div>
 </div>
 
+<div id="winAnimation"></div>
+
 <script src="/socket.io/socket.io.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
 <script>
@@ -174,12 +233,15 @@
     let alivePlayers = [];
     let myVote = null;
     let wolfTarget = null;
+    let maxPlayersInRoom = 0;
+    let readyForNextGame = false;
 
     function createRoom() {
         name = document.getElementById("name").value;
         room = document.getElementById("room").value;
         const wolves = parseInt(document.getElementById("wolves").value);
         const maxPlayers = parseInt(document.getElementById("maxPlayers").value);
+        maxPlayersInRoom = maxPlayers;
 
         if (!name || !room) return alert("Name und Raum-ID eingeben!");
         socket.emit("createRoom", { name, room, wolves, maxPlayers });
@@ -199,6 +261,11 @@
         document.getElementById("gameStatus").textContent = "Lobby";
     }
 
+    socket.on("roomInfo", (roomInfo) => {
+        maxPlayersInRoom = roomInfo.maxPlayers;
+        updateWaitingMessage(roomInfo.players.length);
+    });
+
     socket.on("updatePlayerList", (players) => {
         const playerList = document.getElementById("playerList");
         playerList.textContent = players.map(p => p.name).join(", ");
@@ -206,19 +273,31 @@
         // Spielerliste für spätere Verwendung speichern
         alivePlayers = players;
 
-        // Fortschrittsbalken aktualisieren
-        const room = rooms[roomId];
-        if (room) {
-            const progress = (players.length / room.maxPlayers) * 100;
-            document.getElementById("playerProgress").style.width = `${progress}%`;
-        }
+        // Wartenachricht und Fortschrittsbalken aktualisieren
+        updateWaitingMessage(players.length);
+        const progress = (players.length / maxPlayersInRoom) * 100;
+        document.getElementById("playerProgress").style.width = `${progress}%`;
     });
+
+    function updateWaitingMessage(currentPlayers) {
+        const waitingMessage = document.getElementById("waitingMessage");
+        const playersNeeded = maxPlayersInRoom - currentPlayers;
+
+        if (playersNeeded > 0) {
+            waitingMessage.textContent = `Warte auf ${playersNeeded} weitere Spieler...`;
+        } else if (readyForNextGame) {
+            waitingMessage.textContent = `Bereit für nächste Runde...`;
+        } else {
+            waitingMessage.textContent = `Spiel startet in Kürze!`;
+        }
+    }
 
     // Animierte Rollenzuweisung
     socket.on("showRole", (role) => {
         document.getElementById("game").style.display = "none";
         document.getElementById("roleDisplay").style.display = "block";
         document.getElementById("gameStatus").textContent = "Rollenverteilung";
+        readyForNextGame = false;
 
         const roleText = document.getElementById("roleText");
         roleText.textContent = "";
@@ -294,7 +373,7 @@
             wolfVoteButtons.innerHTML = "";
 
             alivePlayers.forEach(player => {
-                if (player.role !== "Werwolf") { // Werwölfe können keine Werwölfe wählen
+                if (player.role !== "Werwolf" && player.alive) { // Werwölfe können keine Werwölfe wählen
                     const btn = document.createElement("button");
                     btn.className = "btn btn-outline-light vote-btn";
                     btn.textContent = player.name;
@@ -345,7 +424,9 @@
         const victimName = document.getElementById("victimName");
 
         deathText.textContent = "Gestorben ist...";
+        victimName.textContent = "";
         deathText.classList.add("visible");
+        victimName.classList.remove("visible");
 
         // Nach einer Sekunde den Namen anzeigen
         setTimeout(() => {
@@ -427,25 +508,161 @@
         document.getElementById("dayPhase").style.display = "none";
         document.getElementById("deathAnnouncement").style.display = "none";
 
-        const gameDiv = document.getElementById("game");
-        gameDiv.style.display = "block";
-        gameDiv.innerHTML = `
-            <h2 class="text-center mb-4">${result.winner} haben gewonnen!</h2>
-            <div class="card p-3">
-                <h4>Spieler:</h4>
-                <ul class="list-group">
-                    ${result.players.map(p => `
-                        <li class="list-group-item d-flex justify-content-between align-items-center">
-                            ${p.name}
-                            <span class="badge ${p.role === 'Werwolf' ? 'bg-danger' : 'bg-primary'}">${p.role}</span>
-                        </li>
-                    `).join('')}
-                </ul>
-            </div>
-            <button class="btn btn-primary mt-3 w-100" onclick="location.reload()">Neues Spiel</button>
-        `;
-        document.getElementById("gameStatus").textContent = "Spiel beendet";
+        // Gewinn-Animation basierend auf Sieger
+        playWinAnimation(result.winner);
+
+        // Nach Animation Spielergebnisse anzeigen
+        setTimeout(() => {
+            const gameDiv = document.getElementById("game");
+            gameDiv.style.display = "block";
+            gameDiv.innerHTML = `
+                <h2 class="text-center mb-4">${result.winner} haben gewonnen!</h2>
+                <div class="card p-3">
+                    <h4>Spieler:</h4>
+                    <ul class="list-group">
+                        ${result.players.map(p => `
+                            <li class="list-group-item d-flex justify-content-between align-items-center">
+                                ${p.name}
+                                <span class="badge ${p.role === 'Werwolf' ? 'bg-danger' : 'bg-primary'}">${p.role}</span>
+                            </li>
+                        `).join('')}
+                    </ul>
+                </div>
+                <div class="d-flex justify-content-between mt-3">
+                    <button class="btn btn-primary flex-grow-1 me-2" onclick="playAgain()">Nochmal spielen</button>
+                    <button class="btn btn-secondary flex-grow-1" onclick="location.reload()">Neues Spiel</button>
+                </div>
+            `;
+            document.getElementById("gameStatus").textContent = "Spiel beendet";
+        }, 3500);
     });
+
+    function playAgain() {
+        readyForNextGame = true;
+        socket.emit("playAgain", { room, name });
+
+        const gameDiv = document.getElementById("game");
+        gameDiv.innerHTML = `
+            <h3 id="waitingMessage">Warte auf weitere Spieler...</h3>
+            <p id="playerList"></p>
+            <div class="progress mt-2">
+                <div id="playerProgress" class="progress-bar" role="progressbar" style="width: 0%"></div>
+            </div>
+            <button class="btn btn-secondary mt-3" onclick="leaveRoom()">Spiel verlassen</button>
+        `;
+        document.getElementById("gameStatus").textContent = "Lobby";
+    }
+
+    function leaveRoom() {
+        location.reload();
+    }
+
+    function playWinAnimation(winner) {
+        const animationContainer = document.getElementById("winAnimation");
+        animationContainer.style.display = "block";
+
+        if (winner === "Werwölfe") {
+            // Blutverschmierte Animation
+            animationContainer.className = "blood-animation";
+
+            // Blutflecken hinzufügen
+            for (let i = 0; i < 10; i++) {
+                const splash = document.createElement("div");
+                splash.className = "blood-splash";
+
+                // Zufällige Position
+                splash.style.left = `${Math.random() * 80 + 10}%`;
+                splash.style.top = `${Math.random() * 80 + 10}%`;
+
+                // Zufällige Größe
+                const size = Math.random() * 100 + 50;
+                splash.style.width = `${size}px`;
+                splash.style.height = `${size}px`;
+
+                // Zufällige Rotation
+                splash.style.transform = `rotate(${Math.random() * 360}deg)`;
+
+                // Animation mit Verzögerung
+                splash.style.animation = `bloodSplash 2s ease-out ${Math.random() * 1.5}s forwards`;
+
+                animationContainer.appendChild(splash);
+            }
+
+            // Animation nach 3.5 Sekunden entfernen
+            setTimeout(() => {
+                animationContainer.style.display = "none";
+                animationContainer.innerHTML = "";
+                animationContainer.className = "";
+            }, 3500);
+
+        } else {
+            // Konfetti-Animation für Dorfbewohner
+            const confettiContainer = document.createElement("div");
+            confettiContainer.className = "confetti-container";
+            animationContainer.appendChild(confettiContainer);
+
+            // 100 Konfetti-Teilchen erstellen
+            for (let i = 0; i < 100; i++) {
+                createConfetti(confettiContainer);
+            }
+
+            // Animation nach 3.5 Sekunden entfernen
+            setTimeout(() => {
+                animationContainer.style.display = "none";
+                animationContainer.innerHTML = "";
+            }, 3500);
+        }
+    }
+
+    function createConfetti(container) {
+        const confetti = document.createElement("div");
+        confetti.className = "confetti";
+
+        // Zufällige Farbe
+        const colors = ["#f94144", "#f3722c", "#f8961e", "#f9c74f", "#90be6d", "#43aa8b", "#577590", "#277da1"];
+        confetti.style.backgroundColor = colors[Math.floor(Math.random() * colors.length)];
+
+        // Zufällige Form
+        if (Math.random() > 0.5) {
+            confetti.style.borderRadius = "50%";
+        }
+
+        // Zufällige Position
+        const startLeft = Math.random() * 100;
+        confetti.style.left = `${startLeft}%`;
+        confetti.style.top = "-20px";
+
+        // Animation mit CSS
+        const duration = Math.random() * 3 + 2;
+        const delay = Math.random() * 1;
+
+        confetti.style.animation = `
+            fallDown ${duration}s ease-in ${delay}s forwards,
+            sideMovement ${duration * 0.5}s ease-in-out ${delay}s alternate infinite
+        `;
+
+        // Eigene Animation für fallende Konfetti
+        const keyframes = `
+            @keyframes fallDown {
+                0% { transform: translateY(0) rotate(0deg); opacity: 1; }
+                100% { transform: translateY(${window.innerHeight}px) rotate(360deg); opacity: 0; }
+            }
+            @keyframes sideMovement {
+                0% { margin-left: -20px; }
+                100% { margin-left: 20px; }
+            }
+        `;
+
+        // Füge die Keyframes einmalig hinzu
+        if (!document.querySelector('#confetti-keyframes')) {
+            const style = document.createElement('style');
+            style.id = 'confetti-keyframes';
+            style.innerHTML = keyframes;
+            document.head.appendChild(style);
+        }
+
+        container.appendChild(confetti);
+    }
 
     socket.on("errorMessage", (msg) => {
         alert(msg);
