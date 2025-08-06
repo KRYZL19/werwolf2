@@ -4,48 +4,99 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Werwolf Webspiel</title>
+    <!-- Bootstrap CSS -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
     <style>
-        body { font-family: Arial, sans-serif; padding: 20px; max-width: 400px; margin: auto; }
-        input, select, button { width: 100%; padding: 10px; margin-top: 10px; }
+        body {
+            font-family: Arial, sans-serif;
+            padding: 20px;
+            max-width: 400px;
+            margin: auto;
+            background: var(--bs-body-bg);
+            color: var(--bs-body-color);
+            transition: background 0.3s, color 0.3s;
+        }
+        .role-wolf {
+            color: #b30000 !important;
+        }
+        .role-villager {
+            color: #00bfff !important;
+        }
+        .darkmode .role-wolf,
+        .darkmode .role-villager {
+            color: #fff !important;
+            text-shadow: 0 0 8px #b30000, 0 0 2px #00bfff;
+        }
+        .darkmode {
+            background: #181a1b !important;
+            color: #fff !important;
+        }
         #game, #roleDisplay { display: none; margin-top: 20px; }
+        .animate-role {
+            opacity: 0;
+            transition: opacity 0.3s;
+        }
+        .animate-role.visible {
+            opacity: 1;
+        }
+        @media (max-width: 600px) {
+            body { padding: 10px; max-width: 100%; }
+        }
     </style>
 </head>
 <body>
-<h2>Werwolf Spiel</h2>
+<div class="d-flex justify-content-between align-items-center mb-3">
+    <h2 class="mb-0">Werwolf Spiel</h2>
+    <button id="toggleDark" class="btn btn-outline-secondary btn-sm" title="Darkmode umschalten">
+        🌙
+    </button>
+</div>
 
-<div id="menu">
-    <input id="name" placeholder="Dein Name" />
-    <input id="room" placeholder="Raum ID" />
+<div id="menu" class="card p-3 shadow-sm">
+    <input id="name" class="form-control" placeholder="Dein Name" />
+    <input id="room" class="form-control" placeholder="Raum ID" />
 
-    <button onclick="joinRoom()">Raum beitreten</button>
+    <button class="btn btn-primary mt-2" onclick="joinRoom()">Raum beitreten</button>
     <hr />
-    <label>Anzahl Werwölfe:</label>
-    <select id="wolves">
+    <label class="form-label mt-2">Anzahl Werwölfe:</label>
+    <select id="wolves" class="form-select">
         <option>1</option><option>2</option><option>3</option>
     </select>
-    <label>Max Spielerzahl:</label>
-    <select id="maxPlayers">
+    <label class="form-label mt-2">Max Spielerzahl:</label>
+    <select id="maxPlayers" class="form-select">
         <option>5</option><option>6</option><option>7</option><option>8</option>
         <option>9</option><option>10</option><option>11</option><option>12</option>
         <option>13</option><option>14</option><option>15</option>
     </select>
-    <button onclick="createRoom()">Raum erstellen</button>
+    <button class="btn btn-success mt-2" onclick="createRoom()">Raum erstellen</button>
 </div>
 
-<div id="game">
+<div id="game" class="card p-3 shadow-sm mt-3">
     <h3>Warte auf Mitspieler...</h3>
     <p id="playerList"></p>
 </div>
 
-<div id="roleDisplay">
+<div id="roleDisplay" class="card p-3 shadow-sm mt-3 text-center">
     <h3>Deine Rolle:</h3>
-    <h2 id="roleText"></h2>
+    <h2 id="roleText" class="fw-bold"></h2>
 </div>
 
 <script src="/socket.io/socket.io.js"></script>
+<!-- Bootstrap JS (für Button-Styles, nicht zwingend nötig für Funktion) -->
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
 <script>
     const socket = io();
     let name = "", room = "";
+    let darkmode = false;
+
+    // Darkmode Umschalter
+    document.getElementById('toggleDark').onclick = function() {
+        darkmode = !darkmode;
+        document.body.classList.toggle('darkmode', darkmode);
+        // Schriftfarbe für Rolle ggf. anpassen
+        const roleText = document.getElementById('roleText');
+        if (roleText.dataset.role) setRoleColor(roleText.dataset.role);
+    };
 
     function createRoom() {
         name = document.getElementById("name").value;
@@ -73,11 +124,63 @@
         document.getElementById("playerList").textContent = players.join(", ");
     });
 
+    // Animierte Rollenzuweisung
     socket.on("showRole", (role) => {
         document.getElementById("game").style.display = "none";
         document.getElementById("roleDisplay").style.display = "block";
-        document.getElementById("roleText").textContent = role;
+        const roleText = document.getElementById("roleText");
+        roleText.textContent = "";
+        roleText.className = "fw-bold animate-role";
+        roleText.dataset.role = role;
+
+        // Animation: "Du..." -> "Du... bist..." -> "Du... bist... [Rolle]"
+        let steps = [
+            "Du...",
+            "Du... bist...",
+            `Du... bist... ${role === "Werwolf" ? "Werwolf" : "Dorfbewohner"}`
+        ];
+        let i = 0;
+        function showStep() {
+            roleText.textContent = steps[i];
+            roleText.classList.add("visible");
+            setRoleColor(role);
+            if (i < steps.length - 1) {
+                setTimeout(() => {
+                    roleText.classList.remove("visible");
+                    setTimeout(() => {
+                        i++;
+                        showStep();
+                    }, 300);
+                }, 1000);
+            } else {
+                // Nach Animation: Rolle dauerhaft anzeigen
+                setTimeout(() => {
+                    roleText.textContent = role;
+                    setRoleColor(role);
+                    roleText.className = "fw-bold";
+                }, 1000);
+            }
+        }
+        showStep();
     });
+
+    function setRoleColor(role) {
+        const roleText = document.getElementById('roleText');
+        if (darkmode) {
+            roleText.style.color = "#fff";
+        } else if (role === "Werwolf") {
+            roleText.style.color = "#b30000";
+        } else {
+            roleText.style.color = "#00bfff";
+        }
+        if (role === "Werwolf") {
+            roleText.classList.add("role-wolf");
+            roleText.classList.remove("role-villager");
+        } else {
+            roleText.classList.add("role-villager");
+            roleText.classList.remove("role-wolf");
+        }
+    }
 
     socket.on("errorMessage", (msg) => {
         alert(msg);
