@@ -44,7 +44,7 @@
         }
 
         /* Spielelemente */
-        #menu, #game, #roleDisplay, #nightPhase, #dayPhase, #deathAnnouncement, #winAnimation {
+        #menu, #game, #roleDisplay, #nightPhase, #dayPhase, #deathAnnouncement, #winAnimation, #ripScreen {
             display: none;
             margin-top: 20px;
         }
@@ -145,6 +145,30 @@
             opacity: 0;
         }
 
+        /* RIP Screen */
+        #ripScreen {
+            background-color: #333;
+            color: white;
+            text-align: center;
+            padding: 2rem;
+        }
+        .rip-icon {
+            font-size: 5rem;
+            margin-bottom: 1rem;
+        }
+
+        /* Verfügbare Räume */
+        .room-list-item {
+            cursor: pointer;
+            padding: 10px;
+            margin-bottom: 5px;
+            border-radius: 5px;
+            transition: background-color 0.2s;
+        }
+        .room-list-item:hover {
+            background-color: #f0f0f0;
+        }
+
         @media (max-width: 600px) {
             body { padding: 10px; max-width: 100%; }
         }
@@ -173,6 +197,18 @@
         <option>13</option><option>14</option><option>15</option>
     </select>
     <button class="btn btn-success mt-2" onclick="createRoom()">Raum erstellen</button>
+
+    <div class="mt-4">
+        <h5>Verfügbare Räume:</h5>
+        <div id="availableRooms" class="mt-2">
+            <div class="text-center py-2">
+                <div class="spinner-border spinner-border-sm" role="status">
+                    <span class="visually-hidden">Lade Räume...</span>
+                </div>
+                <span class="ms-2">Lade Räume...</span>
+            </div>
+        </div>
+    </div>
 </div>
 
 <div id="game" class="card p-3 shadow-sm mt-3">
@@ -222,6 +258,14 @@
     </div>
 </div>
 
+<div id="ripScreen" class="card shadow-sm">
+    <div class="rip-icon">⚰️</div>
+    <h2>R.I.P.</h2>
+    <p class="lead">Du bist leider tot.</p>
+    <p class="mt-3">Du kannst das Spiel weiterhin verfolgen, aber nicht mehr teilnehmen.</p>
+    <button class="btn btn-secondary mt-4" onclick="location.reload()">Neues Spiel</button>
+</div>
+
 <div id="winAnimation"></div>
 
 <script src="/socket.io/socket.io.js"></script>
@@ -235,6 +279,44 @@
     let wolfTarget = null;
     let maxPlayersInRoom = 0;
     let readyForNextGame = false;
+    let amIDead = false;
+
+    // Beim Laden verfügbare Räume abrufen
+    fetchAvailableRooms();
+
+    // Periodisch Raumliste aktualisieren
+    setInterval(fetchAvailableRooms, 5000);
+
+    function fetchAvailableRooms() {
+        socket.emit("getAvailableRooms");
+    }
+
+    socket.on("availableRooms", (rooms) => {
+        const roomsContainer = document.getElementById("availableRooms");
+
+        if (rooms.length === 0) {
+            roomsContainer.innerHTML = '<p class="text-muted">Keine Räume verfügbar</p>';
+            return;
+        }
+
+        let roomsHtml = '';
+        rooms.forEach(r => {
+            roomsHtml += `
+                <div class="room-list-item border" onclick="selectRoom('${r.id}')">
+                    <div class="d-flex justify-content-between">
+                        <span><b>${r.id}</b></span>
+                        <span>👥 (${r.players}/${r.maxPlayers}) 🐺 [${r.wolves}]</span>
+                    </div>
+                </div>
+            `;
+        });
+
+        roomsContainer.innerHTML = roomsHtml;
+    });
+
+    function selectRoom(roomId) {
+        document.getElementById("room").value = roomId;
+    }
 
     function createRoom() {
         name = document.getElementById("name").value;
@@ -294,6 +376,9 @@
 
     // Animierte Rollenzuweisung
     socket.on("showRole", (role) => {
+        // Alle Ansichten verstecken, außer RIP-Bildschirm falls tot
+        if (amIDead) return;
+
         document.getElementById("game").style.display = "none";
         document.getElementById("roleDisplay").style.display = "block";
         document.getElementById("gameStatus").textContent = "Rollenverteilung";
@@ -356,6 +441,9 @@
 
     // Nachtphase starten
     socket.on("startNight", () => {
+        // Tote Spieler sehen nur den RIP-Bildschirm
+        if (amIDead) return;
+
         document.getElementById("roleDisplay").style.display = "none";
         document.getElementById("dayPhase").style.display = "none";
         document.getElementById("nightPhase").style.display = "block";
@@ -399,7 +487,7 @@
 
     // Werwolf-Votes aktualisieren (für alle Werwölfe)
     socket.on("updateWolfVotes", (votes) => {
-        if (myRole !== "Werwolf") return;
+        if (myRole !== "Werwolf" || amIDead) return;
 
         // Alle Buttons zurücksetzen
         document.querySelectorAll(".vote-btn").forEach(btn =>
@@ -416,6 +504,9 @@
 
     // Tod-Ankündigung
     socket.on("announceVictim", (victim) => {
+        // Auch tote Spieler sehen die Ankündigung, können aber nicht mehr abstimmen
+        if (amIDead) return;
+
         document.getElementById("nightPhase").style.display = "none";
         document.getElementById("deathAnnouncement").style.display = "block";
         document.getElementById("gameStatus").textContent = "Morgengrauen";
@@ -435,13 +526,41 @@
 
             // Nach weiteren 3 Sekunden zur Tagphase übergehen
             setTimeout(() => {
-                socket.emit("readyForDay", { room });
+                // Wenn ich das Opfer bin, zeige RIP-Bildschirm
+                if (victim.id === socket.id) {
+                    showRipScreen();
+                } else {
+                    socket.emit("readyForDay", { room });
+                }
             }, 3000);
         }, 1000);
     });
 
+    // RIP-Bildschirm anzeigen für tote Spieler
+    function showRipScreen() {
+        // Alle Spielansichten ausblenden
+        document.querySelectorAll("#game, #roleDisplay, #nightPhase, #dayPhase, #deathAnnouncement").forEach(el => {
+            el.style.display = "none";
+        });
+
+        // RIP-Bildschirm anzeigen
+        document.getElementById("ripScreen").style.display = "block";
+        document.getElementById("gameStatus").textContent = "Verstorben";
+        amIDead = true;
+    }
+
+    // Spieler wurde aus dem Spiel entfernt (eigene ID prüfen)
+    socket.on("playerEliminated", (playerId) => {
+        if (playerId === socket.id) {
+            showRipScreen();
+        }
+    });
+
     // Tagphase starten
     socket.on("startDay", (data) => {
+        // Tote Spieler sehen nur den RIP-Bildschirm
+        if (amIDead) return;
+
         document.getElementById("deathAnnouncement").style.display = "none";
         document.getElementById("dayPhase").style.display = "block";
         document.getElementById("gameStatus").textContent = "Tag";
@@ -508,6 +627,9 @@
         document.getElementById("dayPhase").style.display = "none";
         document.getElementById("deathAnnouncement").style.display = "none";
 
+        // Wenn Spieler tot ist, trotzdem das Spielende anzeigen
+        document.getElementById("ripScreen").style.display = "none";
+
         // Gewinn-Animation basierend auf Sieger
         playWinAnimation(result.winner);
 
@@ -523,7 +645,10 @@
                         ${result.players.map(p => `
                             <li class="list-group-item d-flex justify-content-between align-items-center">
                                 ${p.name}
-                                <span class="badge ${p.role === 'Werwolf' ? 'bg-danger' : 'bg-primary'}">${p.role}</span>
+                                <div>
+                                    <span class="badge ${p.role === 'Werwolf' ? 'bg-danger' : 'bg-primary'}">${p.role}</span>
+                                    ${p.alive ? '' : '<span class="badge bg-secondary ms-1">☠️ Tot</span>'}
+                                </div>
                             </li>
                         `).join('')}
                     </ul>
@@ -534,6 +659,9 @@
                 </div>
             `;
             document.getElementById("gameStatus").textContent = "Spiel beendet";
+
+            // Spielerstatus zurücksetzen
+            amIDead = false;
         }, 3500);
     });
 

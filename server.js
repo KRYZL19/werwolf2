@@ -13,6 +13,20 @@ app.use(express.static(__dirname + "/public"));
 let rooms = {};
 
 io.on("connection", (socket) => {
+    // Verfügbare Räume abrufen
+    socket.on("getAvailableRooms", () => {
+        const availableRooms = Object.entries(rooms)
+            .filter(([_, room]) => !room.started || room.phase === "lobby")
+            .map(([id, room]) => ({
+                id,
+                players: room.players.length,
+                maxPlayers: room.maxPlayers,
+                wolves: room.wolves
+            }));
+
+        socket.emit("availableRooms", availableRooms);
+    });
+
     socket.on("createRoom", ({ name, room, wolves, maxPlayers }) => {
         if (rooms[room]) {
             socket.emit("errorMessage", "Raum existiert bereits.");
@@ -124,6 +138,9 @@ io.on("connection", (socket) => {
                         id: victim.id,
                         name: victim.name
                     });
+
+                    // Benachrichtigung an das Opfer senden
+                    io.to(victim.id).emit("playerEliminated", victim.id);
 
                     // Spielstatus prüfen
                     checkGameStatus(room);
@@ -305,6 +322,9 @@ function endDayPhase(room) {
                 name: victim.name,
                 votes: maxVotes
             });
+
+            // Benachrichtigung an das Opfer senden
+            io.to(victim.id).emit("playerEliminated", victim.id);
 
             // Spielstatus prüfen
             if (checkGameStatus(room)) {
