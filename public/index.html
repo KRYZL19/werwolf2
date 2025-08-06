@@ -344,6 +344,9 @@
     let readyForNextGame = false;
     let amIDead = false;
 
+    // Initialisiere Chat-Nachrichten
+    let deadChatMessages = [];
+
     // Beim Laden verfügbare Räume abrufen
     fetchAvailableRooms();
 
@@ -525,7 +528,9 @@
 
             // Nur lebende Dorfbewohner als potenzielle Opfer anzeigen
             const livingVictims = alivePlayers.filter(player =>
-                player.role !== "Werwolf" && player.alive);
+                player.id !== socket.id && // Sich selbst nicht anzeigen
+                player.role !== "Werwolf" &&
+                player.alive);
 
             if (livingVictims.length === 0) {
                 wolfVoteButtons.innerHTML = `
@@ -621,14 +626,17 @@
         amIDead = true;
 
         // Toten-Chat initialisieren
-        updateDeadChat();
+        document.getElementById("deadChat").innerHTML = "";
 
-        // Enter-Taste für Chat aktivieren
-        document.getElementById("chatInput").addEventListener("keyup", function(event) {
-            if (event.key === "Enter") {
-                sendDeadChat();
-            }
-        });
+        // Chat-Event-Listener hinzufügen (nur einmal)
+        if (!document.getElementById("chatInput").hasAttribute("data-listener-added")) {
+            document.getElementById("chatInput").addEventListener("keyup", function(event) {
+                if (event.key === "Enter") {
+                    sendDeadChat();
+                }
+            });
+            document.getElementById("chatInput").setAttribute("data-listener-added", "true");
+        }
     }
 
     // Chat-Nachricht senden
@@ -639,6 +647,11 @@
         if (message) {
             socket.emit("deadChat", { room, name, message });
             input.value = "";
+
+            // Lokale Chat-Vorschau anzeigen (optionales Feedback)
+            const chatMessage = { name, message, timestamp: Date.now(), isMe: true };
+            deadChatMessages.push(chatMessage);
+            updateDeadChat();
         }
     }
 
@@ -647,13 +660,18 @@
         const chatContainer = document.getElementById("deadChat");
         let chatHtml = "";
 
-        deadChatMessages.forEach(msg => {
-            chatHtml += `
-                <div class="chat-message">
-                    <span class="sender">${msg.name}:</span> ${msg.message}
-                </div>
-            `;
-        });
+        if (deadChatMessages.length === 0) {
+            chatHtml = '<div class="text-muted">Noch keine Nachrichten. Sei der Erste, der ins Jenseits spricht!</div>';
+        } else {
+            deadChatMessages.forEach(msg => {
+                const isMe = msg.isMe ? 'text-info' : '';
+                chatHtml += `
+                    <div class="chat-message">
+                        <span class="sender ${isMe}">${msg.name}:</span> ${msg.message}
+                    </div>
+                `;
+            });
+        }
 
         chatContainer.innerHTML = chatHtml;
         chatContainer.scrollTop = chatContainer.scrollHeight;
@@ -661,10 +679,11 @@
 
     // Neue Chat-Nachricht erhalten
     socket.on("deadChatMessage", (msg) => {
+        // Nur Nachrichten empfangen, wenn man tot ist
+        if (!amIDead) return;
+
         deadChatMessages.push(msg);
-        if (amIDead) {
-            updateDeadChat();
-        }
+        updateDeadChat();
     });
 
     // Tagphase starten
@@ -678,12 +697,35 @@
         document.body.classList.remove("night-phase");
         document.body.classList.add("day-phase");
 
+        // Abstimmungs-Status zurücksetzen
+        myVote = null;
+        document.getElementById("confirmVote").disabled = true;
+        document.getElementById("confirmVote").textContent = "Stimme abgeben";
+        document.getElementById("skipVoteBtn").classList.remove("selected");
+        document.getElementById("skipVoteBtn").disabled = false;
+
         // Voting-Buttons erstellen
         const dayVoteButtons = document.getElementById("dayVoteButtons");
         dayVoteButtons.innerHTML = "";
 
-        alivePlayers.forEach(player => {
-            if (player.id !== socket.id && player.alive) { // Kann nicht sich selbst wählen
+        // Nur lebende Spieler in der Abstimmungsliste anzeigen
+        // Aktualisieren der alivePlayers mit den vom Server gesendeten Daten
+        if (data && data.alivePlayers) {
+            alivePlayers = data.alivePlayers;
+        }
+
+        const livingPlayers = alivePlayers.filter(player =>
+            player.id !== socket.id && // Sich selbst ausschließen
+            player.alive);
+
+        if (livingPlayers.length <= 1) {
+            dayVoteButtons.innerHTML = `
+                <div class="alert alert-warning">
+                    Nicht genügend Spieler für eine Abstimmung.
+                </div>`;
+            document.getElementById("skipVoteBtn").click(); // Automatisch Skip wählen
+        } else {
+            livingPlayers.forEach(player => {
                 const btn = document.createElement("button");
                 btn.className = "btn btn-outline-dark vote-btn";
                 btn.textContent = player.name;
@@ -692,6 +734,7 @@
                     // Alle Buttons zurücksetzen
                     document.querySelectorAll(".vote-btn").forEach(b =>
                         b.classList.remove("selected"));
+                    document.getElementById("skipVoteBtn").classList.remove("selected");
                     // Diesen Button auswählen
                     this.classList.add("selected");
                     // Vote speichern
@@ -700,8 +743,8 @@
                     document.getElementById("confirmVote").disabled = false;
                 };
                 dayVoteButtons.appendChild(btn);
-            }
-        });
+            });
+        }
 
         // Skip-Button für Abstimmung
         document.getElementById("skipVoteBtn").onclick = function() {
