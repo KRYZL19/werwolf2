@@ -251,6 +251,61 @@ io.on("connection", (socket) => {
             }
         }
     });
+
+    socket.on("playAgain", ({ room, name }) => {
+        const r = rooms[room];
+        if (!r) return;
+
+        // Prüfen, ob der Spieler am Leben ist (nur lebende Spieler dürfen wieder spielen)
+        const player = r.players.find(p => p.id === socket.id);
+        if (!player || !player.alive) {
+            socket.emit("playerEliminated", socket.id); // Erneut RIP-Bildschirm anzeigen
+            return;
+        }
+
+        // Spieler als bereit für nächstes Spiel markieren
+        if (!r.readyForNextGame.includes(socket.id)) {
+            r.readyForNextGame.push(socket.id);
+        }
+
+        console.log(`Spieler ${name} ist bereit für die nächste Runde (${r.readyForNextGame.length}/${r.players.filter(p => p.alive).length})`);
+
+        // Update anderen Spielern, wer bereit ist
+        io.to(room).emit("updatePlayerList", r.players.filter(p =>
+            r.readyForNextGame.includes(p.id)
+        ).map(p => ({
+            id: p.id,
+            name: p.name,
+            alive: true
+        })));
+
+        // Wenn alle lebenden Spieler bereit sind und genug für ein Spiel, neues Spiel starten
+        const alivePlayers = r.players.filter(p => p.alive);
+        const minPlayers = Math.max(4, r.wolves + 2); // Mindestens 4 Spieler oder Werwölfe + 2
+
+        if (r.readyForNextGame.length >= alivePlayers.length && alivePlayers.length >= minPlayers) {
+            console.log(`Starte neue Runde mit ${alivePlayers.length} Spielern`);
+
+            // Spielerliste aktualisieren - nur lebende Spieler und bereitwillige Spieler
+            r.players = r.players.filter(p =>
+                p.alive && r.readyForNextGame.includes(p.id)
+            );
+
+            // Spielstatus zurücksetzen
+            r.started = true;
+            r.phase = "lobby";
+            r.wolfVotes = {};
+            r.dayVotes = {};
+            r.victims = [];
+            r.readyForNextGame = [];
+
+            // Alle benachrichtigen, dass ein neues Spiel beginnt
+            io.to(room).emit("gameStatus", { status: "Neues Spiel beginnt..." });
+
+            // Spiel starten
+            setTimeout(() => startGame(room), 3000);
+        }
+    });
 });
 
 function startGame(room) {
@@ -400,14 +455,30 @@ function checkGameStatus(room) {
     const wolves = r.players.filter(p => p.role === "Werwolf" && p.alive);
     const villagers = r.players.filter(p => p.role === "Dorfbewohner" && p.alive);
 
+    console.log(`Prüfe Spielstatus: ${wolves.length} Werwölfe vs ${villagers.length} Dorfbewohner`);
+
+    // Prüfen, ob genug Spieler übrig sind
+    if (wolves.length + villagers.length < 3) {
+        console.log("Zu wenige Spieler übrig, beende Spiel");
+        if (wolves.length > 0) {
+            endGame(room, "Werwölfe"); // Wenn noch Werwölfe da sind, gewinnen sie
+            return true;
+        } else {
+            endGame(room, "Dorfbewohner"); // Ansonsten gewinnen die Dorfbewohner
+            return true;
+        }
+    }
+
     // Werwölfe haben gewonnen, wenn sie gleich viele oder mehr sind als Dorfbewohner
     if (wolves.length >= villagers.length) {
+        console.log("Werwölfe haben gewonnen! (gleiche/mehr Anzahl als Dorfbewohner)");
         endGame(room, "Werwölfe");
         return true;
     }
 
     // Dorfbewohner haben gewonnen, wenn alle Werwölfe tot sind
     if (wolves.length === 0) {
+        console.log("Dorfbewohner haben gewonnen! (alle Werwölfe tot)");
         endGame(room, "Dorfbewohner");
         return true;
     }
@@ -422,6 +493,8 @@ function endGame(room, winner) {
     r.phase = "gameOver";
     r.started = false;
     r.readyForNextGame = [];
+
+    console.log(`Spiel in Raum ${room} beendet. Gewinner: ${winner}`);
 
     io.to(room).emit("gameOver", {
         winner,
