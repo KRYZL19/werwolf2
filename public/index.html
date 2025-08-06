@@ -88,6 +88,19 @@
             color: black;
         }
 
+        /* Wolf-Opfer-Buttons im Nachtmodus */
+        .wolf-target-btn {
+            color: #ff5555 !important;
+            border-color: #ff5555;
+        }
+        .wolf-target-btn:hover {
+            background-color: rgba(255, 85, 85, 0.2);
+        }
+        .wolf-target-btn.selected {
+            background-color: #dc3545;
+            color: white !important;
+        }
+
         /* Gewinn-Animationen */
         #winAnimation {
             position: fixed;
@@ -147,7 +160,7 @@
 
         /* RIP Screen */
         #ripScreen {
-            background-color: #333;
+            background-color: #222;
             color: white;
             text-align: center;
             padding: 2rem;
@@ -155,6 +168,26 @@
         .rip-icon {
             font-size: 5rem;
             margin-bottom: 1rem;
+        }
+
+        /* Win/Loss Badge für Spielergebnis */
+        .result-badge {
+            display: inline-block;
+            width: 24px;
+            height: 24px;
+            line-height: 24px;
+            text-align: center;
+            border-radius: 50%;
+            font-weight: bold;
+            margin-left: 5px;
+        }
+        .win-badge {
+            border: 2px solid #28a745;
+            color: #28a745;
+        }
+        .loss-badge {
+            border: 2px solid #dc3545;
+            color: #dc3545;
         }
 
         /* Verfügbare Räume */
@@ -263,7 +296,7 @@
     <h2>R.I.P.</h2>
     <p class="lead">Du bist leider tot.</p>
     <p class="mt-3">Du kannst das Spiel weiterhin verfolgen, aber nicht mehr teilnehmen.</p>
-    <button class="btn btn-secondary mt-4" onclick="location.reload()">Neues Spiel</button>
+    <p class="text-danger mt-3">Tote können nicht mehr zurückkehren...</p>
 </div>
 
 <div id="winAnimation"></div>
@@ -460,10 +493,19 @@
             const wolfVoteButtons = document.getElementById("wolfVoteButtons");
             wolfVoteButtons.innerHTML = "";
 
-            alivePlayers.forEach(player => {
-                if (player.role !== "Werwolf" && player.alive) { // Werwölfe können keine Werwölfe wählen
+            // Nur lebende Dorfbewohner als potenzielle Opfer anzeigen
+            const livingVictims = alivePlayers.filter(player =>
+                player.role !== "Werwolf" && player.alive);
+
+            if (livingVictims.length === 0) {
+                wolfVoteButtons.innerHTML = `
+                    <div class="alert alert-warning">
+                        Keine Dorfbewohner mehr übrig!
+                    </div>`;
+            } else {
+                livingVictims.forEach(player => {
                     const btn = document.createElement("button");
-                    btn.className = "btn btn-outline-light vote-btn";
+                    btn.className = "btn btn-outline-light vote-btn wolf-target-btn";
                     btn.textContent = player.name;
                     btn.dataset.player = player.id;
                     btn.onclick = function() {
@@ -477,8 +519,8 @@
                         socket.emit("wolfVote", { room, target: player.id });
                     };
                     wolfVoteButtons.appendChild(btn);
-                }
-            });
+                });
+            }
         } else {
             document.getElementById("wolfVote").style.display = "none";
             document.getElementById("villagerNight").style.display = "block";
@@ -627,8 +669,8 @@
         document.getElementById("dayPhase").style.display = "none";
         document.getElementById("deathAnnouncement").style.display = "none";
 
-        // Wenn Spieler tot ist, trotzdem das Spielende anzeigen
-        document.getElementById("ripScreen").style.display = "none";
+        // Wenn Spieler tot ist, soll er im RIP-Bildschirm bleiben
+        if (amIDead) return;
 
         // Gewinn-Animation basierend auf Sieger
         playWinAnimation(result.winner);
@@ -642,15 +684,23 @@
                 <div class="card p-3">
                     <h4>Spieler:</h4>
                     <ul class="list-group">
-                        ${result.players.map(p => `
+                        ${result.players.map(p => {
+                            // Bestimmen, ob Spieler gewonnen hat
+                            const hasWon = (p.role === "Werwolf" && result.winner === "Werwölfe") ||
+                                         (p.role === "Dorfbewohner" && result.winner === "Dorfbewohner");
+
+                            return `
                             <li class="list-group-item d-flex justify-content-between align-items-center">
-                                ${p.name}
+                                <div>
+                                    ${p.name}
+                                    <span class="result-badge ${hasWon ? 'win-badge' : 'loss-badge'}">${hasWon ? 'W' : 'L'}</span>
+                                </div>
                                 <div>
                                     <span class="badge ${p.role === 'Werwolf' ? 'bg-danger' : 'bg-primary'}">${p.role}</span>
                                     ${p.alive ? '' : '<span class="badge bg-secondary ms-1">☠️ Tot</span>'}
                                 </div>
-                            </li>
-                        `).join('')}
+                            </li>`;
+                        }).join('')}
                     </ul>
                 </div>
                 <div class="d-flex justify-content-between mt-3">
@@ -660,8 +710,8 @@
             `;
             document.getElementById("gameStatus").textContent = "Spiel beendet";
 
-            // Spielerstatus zurücksetzen
-            amIDead = false;
+            // Spielerstatus zurücksetzen (nur für lebende Spieler)
+            // amIDead bleibt unverändert
         }, 3500);
     });
 

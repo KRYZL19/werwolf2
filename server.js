@@ -189,6 +189,13 @@ io.on("connection", (socket) => {
         const r = rooms[room];
         if (!r) return;
 
+        // Prüfen, ob der Spieler am Leben ist (nur lebende Spieler dürfen wieder spielen)
+        const player = r.players.find(p => p.id === socket.id);
+        if (!player || !player.alive) {
+            socket.emit("playerEliminated", socket.id); // Erneut RIP-Bildschirm anzeigen
+            return;
+        }
+
         // Spieler als bereit für nächstes Spiel markieren
         if (!r.readyForNextGame.includes(socket.id)) {
             r.readyForNextGame.push(socket.id);
@@ -205,8 +212,10 @@ io.on("connection", (socket) => {
 
         // Wenn alle bereit sind und genug für ein Spiel, neues Spiel starten
         if (r.readyForNextGame.length >= Math.max(5, r.wolves + 3)) {
-            // Spielerliste aktualisieren
-            r.players = r.players.filter(p => r.readyForNextGame.includes(p.id));
+            // Spielerliste aktualisieren - nur lebende Spieler und bereitwillige Spieler
+            r.players = r.players.filter(p =>
+                p.alive && r.readyForNextGame.includes(p.id)
+            );
 
             // Spielstatus zurücksetzen
             r.started = true;
