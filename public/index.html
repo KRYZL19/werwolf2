@@ -785,10 +785,8 @@
             socket.emit("deadChat", { room, name, message });
             input.value = "";
 
-            // Lokale Chat-Vorschau anzeigen (optionales Feedback)
-            const chatMessage = { name, message, timestamp: Date.now(), isMe: true };
-            deadChatMessages.push(chatMessage);
-            updateDeadChat();
+            // Keine lokale Nachricht mehr hinzufügen, um Duplikate zu vermeiden
+            // Die Nachricht kommt vom Server zurück
         }
     }
 
@@ -801,7 +799,7 @@
             chatHtml = '<div class="text-muted">Noch keine Nachrichten. Sei der Erste, der ins Jenseits spricht!</div>';
         } else {
             deadChatMessages.forEach(msg => {
-                const isMe = msg.isMe ? 'text-info' : '';
+                const isMe = msg.senderId === socket.id ? 'text-info' : '';
                 chatHtml += `
                     <div class="chat-message">
                         <span class="sender ${isMe}">${msg.name}:</span> ${msg.message}
@@ -981,14 +979,9 @@
         }
 
         // Alle UI-Elemente ausblenden
-        document.getElementById("nightPhase").style.display = "none";
-        document.getElementById("dayPhase").style.display = "none";
-        document.getElementById("deathAnnouncement").style.display = "none";
-
-        // Auch für tote Spieler den RIP-Screen ausblenden
-        if (amIDead) {
-            document.getElementById("ripScreen").style.display = "none";
-        }
+        document.querySelectorAll("#nightPhase, #dayPhase, #deathAnnouncement, #ripScreen").forEach(el => {
+            el.style.display = "none";
+        });
 
         // Setze globalen Spielstatus
         document.getElementById("gameStatus").textContent = "Spiel beendet - " + result.winner + " gewinnen";
@@ -1163,9 +1156,15 @@
 
     // Versionsinfo aktualisieren
     document.getElementById('versionInfo').innerHTML = `
-        v1.3.0 <span class="toggle-details" onclick="toggleVersionDetails()">Details anzeigen</span>
+        v1.4.0 <span class="toggle-details" onclick="toggleVersionDetails()">Details anzeigen</span>
         <div id="versionDetails">
-            <p><strong>v1.3.0</strong> (aktuelle Version):</p>
+            <p><strong>v1.4.0</strong> (aktuelle Version):</p>
+            <ul>
+                <li>Tote Spieler sehen jetzt die Endkarte</li>
+                <li>Geisterflüstern doppelte Nachrichten behoben</li>
+                <li>"Erneut spielen" bleibt im gleichen Raum</li>
+            </ul>
+            <p><strong>v1.3.0</strong>:</p>
             <ul>
                 <li>Siegesüberprüfung verbessert</li>
                 <li>Siegesanimationen zuverlässiger gemacht</li>
@@ -1175,12 +1174,6 @@
             <ul>
                 <li>Siegesbildschirme für Werwölfe/Dorfbewohner korrigiert</li>
                 <li>Versions-Informationen hinzugefügt</li>
-            </ul>
-            <p><strong>v1.1.0</strong>:</p>
-            <ul>
-                <li>Geisterflüstern für tote Spieler</li>
-                <li>Skip-Button für Abstimmungen</li>
-                <li>50% Mindestquote für Eliminierungen</li>
             </ul>
         </div>
     `;

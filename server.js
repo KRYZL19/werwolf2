@@ -186,7 +186,12 @@ io.on("connection", (socket) => {
 
         // Nachricht an alle toten Spieler senden
         const deadPlayers = r.players.filter(p => !p.alive);
-        const chatMessage = { name, message: sanitizedMessage, timestamp: Date.now() };
+        const chatMessage = {
+            name,
+            message: sanitizedMessage,
+            timestamp: Date.now(),
+            senderId: socket.id // Sender-ID hinzufügen, damit Client eigene Nachrichten erkennen kann
+        };
 
         deadPlayers.forEach(deadPlayer => {
             io.to(deadPlayer.id).emit("deadChatMessage", chatMessage);
@@ -537,9 +542,9 @@ function endGame(room, winner) {
         });
     }
 
-    // Zusätzlich an den ganzen Raum senden
-    io.to(room).emit("gameOver", {
-        winner,
-        players: sortedPlayers
-    });
+    // Den Raum für ein neues Spiel vorbereiten aber nicht löschen
+    r.wolfVotes = {};
+    r.dayVotes = {};
+    r.readyForNextGame = [];
+    r.phase = "gameOver";
 }
