@@ -166,6 +166,24 @@ io.on("connection", (socket) => {
         });
     });
 
+    // Chat für tote Spieler
+    socket.on("deadChat", ({ room, name, message }) => {
+        const r = rooms[room];
+        if (!r) return;
+
+        // Prüfen, ob der Spieler tot ist
+        const player = r.players.find(p => p.id === socket.id);
+        if (!player || player.alive) return; // Nur tote Spieler dürfen chatten
+
+        // Nachricht an alle toten Spieler senden
+        const deadPlayers = r.players.filter(p => !p.alive);
+        const chatMessage = { name, message, timestamp: Date.now() };
+
+        deadPlayers.forEach(deadPlayer => {
+            io.to(deadPlayer.id).emit("deadChatMessage", chatMessage);
+        });
+    });
+
     socket.on("dayVote", ({ room, target }) => {
         const r = rooms[room];
         if (!r || r.phase !== "day") return;
@@ -173,7 +191,7 @@ io.on("connection", (socket) => {
         const player = r.players.find(p => p.id === socket.id);
         if (!player || !player.alive) return;
 
-        // Vote speichern
+        // Vote speichern (auch Skip-Votes)
         r.dayVotes[socket.id] = target;
 
         // Prüfen, ob alle lebenden Spieler abgestimmt haben
@@ -185,49 +203,12 @@ io.on("connection", (socket) => {
         }
     });
 
-    socket.on("playAgain", ({ room, name }) => {
+    socket.on("readyForNight", ({ room }) => {
         const r = rooms[room];
         if (!r) return;
 
-        // Prüfen, ob der Spieler am Leben ist (nur lebende Spieler dürfen wieder spielen)
-        const player = r.players.find(p => p.id === socket.id);
-        if (!player || !player.alive) {
-            socket.emit("playerEliminated", socket.id); // Erneut RIP-Bildschirm anzeigen
-            return;
-        }
-
-        // Spieler als bereit für nächstes Spiel markieren
-        if (!r.readyForNextGame.includes(socket.id)) {
-            r.readyForNextGame.push(socket.id);
-        }
-
-        // Update anderen Spielern, wer bereit ist
-        io.to(room).emit("updatePlayerList", r.players.filter(p =>
-            r.readyForNextGame.includes(p.id)
-        ).map(p => ({
-            id: p.id,
-            name: p.name,
-            alive: true
-        })));
-
-        // Wenn alle bereit sind und genug für ein Spiel, neues Spiel starten
-        if (r.readyForNextGame.length >= Math.max(5, r.wolves + 3)) {
-            // Spielerliste aktualisieren - nur lebende Spieler und bereitwillige Spieler
-            r.players = r.players.filter(p =>
-                p.alive && r.readyForNextGame.includes(p.id)
-            );
-
-            // Spielstatus zurücksetzen
-            r.started = true;
-            r.phase = "lobby";
-            r.wolfVotes = {};
-            r.dayVotes = {};
-            r.victims = [];
-            r.readyForNextGame = [];
-
-            // Spiel starten
-            setTimeout(() => startGame(room), 3000);
-        }
+        // Nachtphase starten
+        startNightPhase(room);
     });
 
     socket.on("disconnect", () => {
@@ -302,10 +283,18 @@ function endDayPhase(room) {
     const r = rooms[room];
     if (!r) return;
 
-    // Votes zählen
+    // Votes zählen (Skip-Votes ignorieren)
     const voteCounts = {};
+    let skipVotes = 0;
+    let totalValidVotes = 0;
+
     for (const targetId of Object.values(r.dayVotes)) {
-        voteCounts[targetId] = (voteCounts[targetId] || 0) + 1;
+        if (targetId === "skip") {
+            skipVotes++;
+        } else {
+            voteCounts[targetId] = (voteCounts[targetId] || 0) + 1;
+            totalValidVotes++;
+        }
     }
 
     // Spieler mit den meisten Stimmen finden
@@ -319,7 +308,11 @@ function endDayPhase(room) {
         }
     }
 
-    if (mostVoted) {
+    // Prüfen, ob mehr als 50% der Spieler für einen Spieler gestimmt haben
+    const alivePlayers = r.players.filter(p => p.alive);
+    const voteThreshold = Math.floor(alivePlayers.length / 2) + 1;
+
+    if (mostVoted && maxVotes >= voteThreshold) {
         const victim = r.players.find(p => p.id === mostVoted);
         if (victim) {
             victim.alive = false;
@@ -343,6 +336,11 @@ function endDayPhase(room) {
             // Nach 5 Sekunden die nächste Nachtphase starten
             setTimeout(() => startNightPhase(room), 5000);
         }
+    } else {
+        // Wenn keine Mehrheit: "Niemand ist gestorben"
+        io.to(room).emit("noElimination");
+
+        // Die Nachtphase wird vom Client gestartet (readyForNight Event)
     }
 }
 
