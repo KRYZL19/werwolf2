@@ -708,15 +708,19 @@
         const dayVoteButtons = document.getElementById("dayVoteButtons");
         dayVoteButtons.innerHTML = "";
 
-        // Nur lebende Spieler in der Abstimmungsliste anzeigen
-        // Aktualisieren der alivePlayers mit den vom Server gesendeten Daten
+        // Aktualisierte Spielerliste vom Server übernehmen
         if (data && data.alivePlayers) {
+            console.log("Erhaltene Spielerliste:", data.alivePlayers);
+            // Nur die alivePlayers mit den vom Server empfangenen Daten aktualisieren
             alivePlayers = data.alivePlayers;
         }
 
+        // Nur lebende Spieler anzeigen, die nicht ich selbst sind
         const livingPlayers = alivePlayers.filter(player =>
             player.id !== socket.id && // Sich selbst ausschließen
-            player.alive);
+            player.alive === true);  // Explizit auf true prüfen
+
+        console.log("Gefilterte lebende Spieler:", livingPlayers);
 
         if (livingPlayers.length <= 1) {
             dayVoteButtons.innerHTML = `

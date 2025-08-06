@@ -157,13 +157,18 @@ io.on("connection", (socket) => {
         r.phase = "day";
         r.dayVotes = {};
 
-        // Tagesphase starten - nur lebende Spieler senden
+        // Tagesphase starten - nur lebende Spieler mit Rollen senden
+        const alivePlayers = r.players.filter(p => p.alive).map(p => ({
+            id: p.id,
+            name: p.name,
+            role: p.role,
+            alive: true // Explizit nochmal setzen
+        }));
+
+        console.log("Sende lebende Spieler an Clients:", alivePlayers);
+
         io.to(room).emit("startDay", {
-            alivePlayers: r.players.filter(p => p.alive).map(p => ({
-                id: p.id,
-                name: p.name,
-                role: p.role // Role hinzufügen, damit Client filtern kann
-            }))
+            alivePlayers: alivePlayers
         });
     });
 
@@ -290,13 +295,14 @@ function startNightPhase(room) {
     r.wolfVotes = {};
 
     // Aktualisierte Spielerliste mit Rollen und Lebensstatus senden
-    io.to(room).emit("updatePlayerList", r.players.map(p => ({
+    const updatedPlayerList = r.players.map(p => ({
         id: p.id,
         name: p.name,
         alive: p.alive,
         role: p.role
-    })));
+    }));
 
+    io.to(room).emit("updatePlayerList", updatedPlayerList);
     io.to(room).emit("startNight");
 }
 
@@ -307,7 +313,6 @@ function endDayPhase(room) {
     // Votes zählen (Skip-Votes ignorieren)
     const voteCounts = {};
     let skipVotes = 0;
-    let totalValidVotes = 0;
     const alivePlayers = r.players.filter(p => p.alive);
     const totalVoters = alivePlayers.length;
 
@@ -323,10 +328,11 @@ function endDayPhase(room) {
             const targetPlayer = r.players.find(p => p.id === targetId);
             if (targetPlayer && targetPlayer.alive) {
                 voteCounts[targetId] = (voteCounts[targetId] || 0) + 1;
-                totalValidVotes++;
             }
         }
     }
+
+    console.log("Abstimmungsergebnis:", { voteCounts, skipVotes });
 
     // Spieler mit den meisten Stimmen finden
     let maxVotes = 0;
@@ -341,6 +347,7 @@ function endDayPhase(room) {
 
     // Prüfen, ob mehr als 50% der lebenden Spieler für einen Spieler gestimmt haben
     const voteThreshold = Math.floor(totalVoters / 2) + 1;
+    console.log("Stimmen-Schwellenwert:", voteThreshold, "Max Stimmen:", maxVotes);
 
     if (mostVoted && maxVotes >= voteThreshold) {
         const victim = r.players.find(p => p.id === mostVoted);
@@ -360,12 +367,13 @@ function endDayPhase(room) {
             io.to(victim.id).emit("playerEliminated", victim.id);
 
             // Aktualisierte Spielerliste senden
-            io.to(room).emit("updatePlayerList", r.players.map(p => ({
+            const updatedPlayerList = r.players.map(p => ({
                 id: p.id,
                 name: p.name,
                 alive: p.alive,
                 role: p.role
-            })));
+            }));
+            io.to(room).emit("updatePlayerList", updatedPlayerList);
 
             // Spielstatus prüfen
             if (checkGameStatus(room)) {
@@ -380,6 +388,7 @@ function endDayPhase(room) {
         }
     } else {
         // Wenn keine Mehrheit: "Niemand ist gestorben"
+        console.log("Keine Mehrheit für eine Eliminierung");
         io.to(room).emit("noElimination");
     }
 }
