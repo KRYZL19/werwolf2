@@ -1,0 +1,88 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Werwolf Webspiel</title>
+    <style>
+        body { font-family: Arial, sans-serif; padding: 20px; max-width: 400px; margin: auto; }
+        input, select, button { width: 100%; padding: 10px; margin-top: 10px; }
+        #game, #roleDisplay { display: none; margin-top: 20px; }
+    </style>
+</head>
+<body>
+<h2>Werwolf Spiel</h2>
+
+<div id="menu">
+    <input id="name" placeholder="Dein Name" />
+    <input id="room" placeholder="Raum ID" />
+
+    <button onclick="joinRoom()">Raum beitreten</button>
+    <hr />
+    <label>Anzahl Werwölfe:</label>
+    <select id="wolves">
+        <option>1</option><option>2</option><option>3</option>
+    </select>
+    <label>Max Spielerzahl:</label>
+    <select id="maxPlayers">
+        <option>5</option><option>6</option><option>7</option><option>8</option>
+        <option>9</option><option>10</option><option>11</option><option>12</option>
+        <option>13</option><option>14</option><option>15</option>
+    </select>
+    <button onclick="createRoom()">Raum erstellen</button>
+</div>
+
+<div id="game">
+    <h3>Warte auf Mitspieler...</h3>
+    <p id="playerList"></p>
+</div>
+
+<div id="roleDisplay">
+    <h3>Deine Rolle:</h3>
+    <h2 id="roleText"></h2>
+</div>
+
+<script src="/socket.io/socket.io.js"></script>
+<script>
+    const socket = io();
+    let name = "", room = "";
+
+    function createRoom() {
+        name = document.getElementById("name").value;
+        room = document.getElementById("room").value;
+        const wolves = parseInt(document.getElementById("wolves").value);
+        const maxPlayers = parseInt(document.getElementById("maxPlayers").value);
+
+        if (!name || !room) return alert("Name und Raum-ID eingeben!");
+        socket.emit("createRoom", { name, room, wolves, maxPlayers });
+        document.getElementById("menu").style.display = "none";
+        document.getElementById("game").style.display = "block";
+    }
+
+    function joinRoom() {
+        name = document.getElementById("name").value;
+        room = document.getElementById("room").value;
+
+        if (!name || !room) return alert("Name und Raum-ID eingeben!");
+        socket.emit("joinRoom", { name, room });
+        document.getElementById("menu").style.display = "none";
+        document.getElementById("game").style.display = "block";
+    }
+
+    socket.on("updatePlayerList", (players) => {
+        document.getElementById("playerList").textContent = players.join(", ");
+    });
+
+    socket.on("showRole", (role) => {
+        document.getElementById("game").style.display = "none";
+        document.getElementById("roleDisplay").style.display = "block";
+        document.getElementById("roleText").textContent = role;
+    });
+
+    socket.on("errorMessage", (msg) => {
+        alert(msg);
+        location.reload();
+    });
+</script>
+</body>
+</html>
