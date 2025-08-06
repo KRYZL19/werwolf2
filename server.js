@@ -496,13 +496,27 @@ function endGame(room, winner) {
 
     console.log(`Spiel in Raum ${room} beendet. Gewinner: ${winner}`);
 
+    // Spieler sortieren: Gewinner zuerst, dann nach Rolle und Status
+    const sortedPlayers = r.players.map(p => ({
+        id: p.id,
+        name: p.name,
+        role: p.role,
+        alive: p.alive,
+        isWinner: (p.role === "Werwolf" && winner === "Werwölfe") ||
+                 (p.role === "Dorfbewohner" && winner === "Dorfbewohner")
+    })).sort((a, b) => {
+        // Gewinner zuerst
+        if (a.isWinner && !b.isWinner) return -1;
+        if (!a.isWinner && b.isWinner) return 1;
+        // Dann nach Rolle (Werwölfe gruppieren)
+        if (a.role !== b.role) return a.role === "Werwolf" ? -1 : 1;
+        // Dann nach Status (Lebende zuerst)
+        if (a.alive !== b.alive) return a.alive ? -1 : 1;
+        return 0;
+    });
+
     io.to(room).emit("gameOver", {
         winner,
-        players: r.players.map(p => ({
-            id: p.id,
-            name: p.name,
-            role: p.role,
-            alive: p.alive
-        }))
+        players: sortedPlayers
     });
 }

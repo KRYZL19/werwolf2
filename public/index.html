@@ -290,6 +290,50 @@
             z-index: 2000; /* Höherer z-index für bessere Sichtbarkeit */
         }
 
+        /* Version Info */
+        #versionInfo {
+            position: fixed;
+            bottom: 10px;
+            right: 10px;
+            font-size: 0.75rem;
+            background-color: rgba(0, 0, 0, 0.5);
+            color: white;
+            padding: 5px 10px;
+            border-radius: 5px;
+            z-index: 100;
+            max-width: 300px;
+            overflow: hidden;
+        }
+
+        #versionInfo .toggle-details {
+            cursor: pointer;
+            text-decoration: underline;
+        }
+
+        #versionDetails {
+            display: none;
+            margin-top: 5px;
+            font-size: 0.7rem;
+            max-height: 150px;
+            overflow-y: auto;
+        }
+
+        /* Verbesserte Siege-Animationen */
+        #winAnimation {
+            z-index: 2000;
+        }
+
+        /* Konfetti-Animation verbessern */
+        @keyframes fallDown {
+            0% { transform: translateY(0) rotate(0deg); opacity: 1; }
+            100% { transform: translateY(100vh) rotate(360deg); opacity: 0; }
+        }
+
+        @keyframes sideMovement {
+            0% { margin-left: -20px; }
+            100% { margin-left: 20px; }
+        }
+
         @media (max-width: 600px) {
             body { padding: 10px; max-width: 100%; }
         }
@@ -396,6 +440,31 @@
             <input type="text" id="chatInput" class="form-control" placeholder="Nachricht schreiben..." />
             <button class="btn btn-outline-light ms-2" onclick="sendDeadChat()">↑</button>
         </div>
+    </div>
+</div>
+
+<div id="winAnimation"></div>
+
+<div id="versionInfo">
+    v1.2.0 <span class="toggle-details" onclick="toggleVersionDetails()">Details anzeigen</span>
+    <div id="versionDetails">
+        <p><strong>v1.2.0</strong> (aktuelle Version):</p>
+        <ul>
+            <li>Siegesbildschirme für Werwölfe/Dorfbewohner korrigiert</li>
+            <li>Versions-Informationen hinzugefügt</li>
+        </ul>
+        <p><strong>v1.1.0</strong>:</p>
+        <ul>
+            <li>Geisterflüstern für tote Spieler</li>
+            <li>Skip-Button für Abstimmungen</li>
+            <li>50% Mindestquote für Eliminierungen</li>
+        </ul>
+        <p><strong>v1.0.0</strong>:</p>
+        <ul>
+            <li>Grundlegendes Spiel implementiert</li>
+            <li>Tag- und Nachtphasen</li>
+            <li>Raumverwaltung</li>
+        </ul>
     </div>
 </div>
 
@@ -906,6 +975,8 @@
         document.getElementById("dayPhase").style.display = "none";
         document.getElementById("deathAnnouncement").style.display = "none";
 
+        console.log("Spielende erreicht! Gewinner:", result.winner);
+
         // Gewinn-Animation basierend auf Sieger, auch für tote Spieler
         playWinAnimation(result.winner);
 
@@ -1002,9 +1073,25 @@
         document.getElementById("gameStatus").textContent = "Lobby";
     }
 
+    // Versions-Details ein-/ausblenden
+    function toggleVersionDetails() {
+        const details = document.getElementById('versionDetails');
+        const toggle = document.querySelector('.toggle-details');
+        if (details.style.display === 'block') {
+            details.style.display = 'none';
+            toggle.textContent = 'Details anzeigen';
+        } else {
+            details.style.display = 'block';
+            toggle.textContent = 'Details ausblenden';
+        }
+    }
+
     function playWinAnimation(winner) {
         const animationContainer = document.getElementById("winAnimation");
         animationContainer.style.display = "block";
+        animationContainer.innerHTML = "";  // Bestehende Inhalte löschen
+
+        console.log("Starte Sieger-Animation für:", winner);
 
         if (winner === "Werwölfe") {
             // Blutverschmierte Animation
@@ -1033,9 +1120,31 @@
                 animationContainer.appendChild(splash);
             }
 
-            // Zusätzliches Wolf-Heulen abspielen
-            const howl = new Audio('data:audio/wav;base64,UklGRigAAABXQVZFZm10IBAAAAABAAEARKwAAIhYAQACABAAZGF0YQQAAAAAAA==');
-            howl.play().catch(e => console.log("Audio konnte nicht abgespielt werden", e));
+            // Wolf-Titel hinzufügen
+            const wolfTitle = document.createElement("div");
+            wolfTitle.style.position = "absolute";
+            wolfTitle.style.top = "40%";
+            wolfTitle.style.width = "100%";
+            wolfTitle.style.textAlign = "center";
+            wolfTitle.style.color = "#ffffff";
+            wolfTitle.style.fontSize = "3rem";
+            wolfTitle.style.textShadow = "0 0 10px #ff0000";
+            wolfTitle.style.fontWeight = "bold";
+            wolfTitle.style.opacity = "0";
+            wolfTitle.style.animation = "fadeIn 1s 1s forwards";
+            wolfTitle.textContent = "DIE WERWÖLFE HABEN GEWONNEN";
+
+            // CSS für den Titel hinzufügen
+            const titleStyle = document.createElement("style");
+            titleStyle.textContent = `
+                @keyframes fadeIn {
+                    from { opacity: 0; }
+                    to { opacity: 1; }
+                }
+            `;
+            document.head.appendChild(titleStyle);
+
+            animationContainer.appendChild(wolfTitle);
 
             // Animation nach 3.5 Sekunden entfernen
             setTimeout(() => {
@@ -1054,6 +1163,22 @@
             for (let i = 0; i < 150; i++) {
                 createConfetti(confettiContainer);
             }
+
+            // Sieges-Titel hinzufügen
+            const villagerTitle = document.createElement("div");
+            villagerTitle.style.position = "absolute";
+            villagerTitle.style.top = "40%";
+            villagerTitle.style.width = "100%";
+            villagerTitle.style.textAlign = "center";
+            villagerTitle.style.color = "#ffffff";
+            villagerTitle.style.fontSize = "3rem";
+            villagerTitle.style.textShadow = "0 0 10px #00aaff";
+            villagerTitle.style.fontWeight = "bold";
+            villagerTitle.style.opacity = "0";
+            villagerTitle.style.animation = "fadeIn 1s 1s forwards";
+            villagerTitle.textContent = "DIE DORFBEWOHNER HABEN GEWONNEN";
+
+            animationContainer.appendChild(villagerTitle);
 
             // Animation nach 3.5 Sekunden entfernen
             setTimeout(() => {
@@ -1089,26 +1214,6 @@
             fallDown ${duration}s ease-in ${delay}s forwards,
             sideMovement ${duration * 0.5}s ease-in-out ${delay}s alternate infinite
         `;
-
-        // Eigene Animation für fallende Konfetti
-        const keyframes = `
-            @keyframes fallDown {
-                0% { transform: translateY(0) rotate(0deg); opacity: 1; }
-                100% { transform: translateY(${window.innerHeight}px) rotate(360deg); opacity: 0; }
-            }
-            @keyframes sideMovement {
-                0% { margin-left: -20px; }
-                100% { margin-left: 20px; }
-            }
-        `;
-
-        // Füge die Keyframes einmalig hinzu
-        if (!document.querySelector('#confetti-keyframes')) {
-            const style = document.createElement('style');
-            style.id = 'confetti-keyframes';
-            style.innerHTML = keyframes;
-            document.head.appendChild(style);
-        }
 
         container.appendChild(confetti);
     }
