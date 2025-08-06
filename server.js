@@ -21,14 +21,23 @@ io.on("connection", (socket) => {
 
         rooms[room] = {
             host: socket.id,
-            players: [{ id: socket.id, name, role: null }],
+            players: [{ id: socket.id, name, role: null, alive: true }],
             wolves,
             maxPlayers,
-            started: false
+            started: false,
+            phase: "lobby",
+            wolfVotes: {},
+            dayVotes: {},
+            victims: []
         };
 
         socket.join(room);
-        io.to(room).emit("updatePlayerList", rooms[room].players.map(p => p.name));
+        socket.data.room = room;
+        io.to(room).emit("updatePlayerList", rooms[room].players.map(p => ({
+            id: p.id,
+            name: p.name,
+            alive: p.alive
+        })));
     });
 
     socket.on("joinRoom", ({ name, room }) => {
@@ -48,9 +57,14 @@ io.on("connection", (socket) => {
             return;
         }
 
-        r.players.push({ id: socket.id, name, role: null });
+        r.players.push({ id: socket.id, name, role: null, alive: true });
         socket.join(room);
-        io.to(room).emit("updatePlayerList", r.players.map(p => p.name));
+        socket.data.room = room;
+        io.to(room).emit("updatePlayerList", r.players.map(p => ({
+            id: p.id,
+            name: p.name,
+            alive: p.alive
+        })));
 
         if (r.players.length === r.maxPlayers) {
             r.started = true;
@@ -58,14 +72,107 @@ io.on("connection", (socket) => {
         }
     });
 
+    socket.on("wolfVote", ({ room, target }) => {
+        const r = rooms[room];
+        if (!r || r.phase !== "night") return;
+
+        const player = r.players.find(p => p.id === socket.id);
+        if (!player || player.role !== "Werwolf" || !player.alive) return;
+
+        // Vote speichern
+        r.wolfVotes[socket.id] = target;
+
+        // Allen Werwölfen die aktuellen Votes übermitteln
+        const wolves = r.players.filter(p => p.role === "Werwolf" && p.alive);
+        wolves.forEach(wolf => {
+            io.to(wolf.id).emit("updateWolfVotes", r.wolfVotes);
+        });
+
+        // Prüfen, ob alle Werwölfe abgestimmt haben und das gleiche Ziel haben
+        const allWolvesVoted = wolves.every(wolf => r.wolfVotes[wolf.id]);
+        if (allWolvesVoted) {
+            const votes = Object.values(r.wolfVotes);
+            const allSameTarget = votes.every(v => v === votes[0]);
+
+            if (allSameTarget) {
+                // Opfer festlegen und zur Tagesphase übergehen
+                const victim = r.players.find(p => p.id === votes[0]);
+                if (victim) {
+                    victim.alive = false;
+                    r.victims.push(victim);
+
+                    // Phase auf "announcement" setzen
+                    r.phase = "announcement";
+
+                    // Allen Spielern das Opfer mitteilen
+                    io.to(room).emit("announceVictim", {
+                        id: victim.id,
+                        name: victim.name
+                    });
+
+                    // Spielstatus prüfen
+                    checkGameStatus(room);
+                }
+            }
+        }
+    });
+
+    socket.on("readyForDay", ({ room }) => {
+        const r = rooms[room];
+        if (!r || r.phase !== "announcement") return;
+
+        // Phase auf "day" setzen
+        r.phase = "day";
+        r.dayVotes = {};
+
+        // Tagesphase starten
+        io.to(room).emit("startDay", {
+            alivePlayers: r.players.filter(p => p.alive).map(p => ({
+                id: p.id,
+                name: p.name
+            }))
+        });
+    });
+
+    socket.on("dayVote", ({ room, target }) => {
+        const r = rooms[room];
+        if (!r || r.phase !== "day") return;
+
+        const player = r.players.find(p => p.id === socket.id);
+        if (!player || !player.alive) return;
+
+        // Vote speichern
+        r.dayVotes[socket.id] = target;
+
+        // Prüfen, ob alle lebenden Spieler abgestimmt haben
+        const alivePlayers = r.players.filter(p => p.alive);
+        const allVoted = alivePlayers.every(p => r.dayVotes[p.id]);
+
+        if (allVoted) {
+            endDayPhase(room);
+        }
+    });
+
     socket.on("disconnect", () => {
-        for (const [room, data] of Object.entries(rooms)) {
-            const index = data.players.findIndex(p => p.id === socket.id);
-            if (index !== -1) {
-                data.players.splice(index, 1);
-                io.to(room).emit("updatePlayerList", data.players.map(p => p.name));
-                if (data.players.length === 0) delete rooms[room];
-                break;
+        const room = socket.data.room;
+        if (!room || !rooms[room]) return;
+
+        const index = rooms[room].players.findIndex(p => p.id === socket.id);
+        if (index !== -1) {
+            rooms[room].players.splice(index, 1);
+            io.to(room).emit("updatePlayerList", rooms[room].players.map(p => ({
+                id: p.id,
+                name: p.name,
+                alive: p.alive
+            })));
+
+            // Raum löschen, wenn leer
+            if (rooms[room].players.length === 0) {
+                delete rooms[room];
+            }
+            // Spiel beenden, wenn zu wenige Spieler
+            else if (rooms[room].started) {
+                checkGameStatus(room);
             }
         }
     });
@@ -86,4 +193,106 @@ function startGame(room) {
     for (const player of shuffled) {
         io.to(player.id).emit("showRole", player.role);
     }
+
+    // Nach 10 Sekunden die erste Nachtphase starten
+    setTimeout(() => startNightPhase(room), 10000);
+}
+
+function startNightPhase(room) {
+    const r = rooms[room];
+    if (!r) return;
+
+    r.phase = "night";
+    r.wolfVotes = {};
+
+    io.to(room).emit("startNight");
+}
+
+function endDayPhase(room) {
+    const r = rooms[room];
+    if (!r) return;
+
+    // Votes zählen
+    const voteCounts = {};
+    for (const targetId of Object.values(r.dayVotes)) {
+        voteCounts[targetId] = (voteCounts[targetId] || 0) + 1;
+    }
+
+    // Spieler mit den meisten Stimmen finden
+    let maxVotes = 0;
+    let mostVoted = null;
+
+    for (const [targetId, count] of Object.entries(voteCounts)) {
+        if (count > maxVotes) {
+            maxVotes = count;
+            mostVoted = targetId;
+        }
+    }
+
+    if (mostVoted) {
+        const victim = r.players.find(p => p.id === mostVoted);
+        if (victim) {
+            victim.alive = false;
+            r.victims.push(victim);
+
+            // Allen Spielern das Opfer mitteilen
+            io.to(room).emit("announceVictim", {
+                id: victim.id,
+                name: victim.name,
+                votes: maxVotes
+            });
+
+            // Spielstatus prüfen
+            if (checkGameStatus(room)) {
+                return; // Spiel ist vorbei
+            }
+
+            // Nach 5 Sekunden die nächste Nachtphase starten
+            setTimeout(() => startNightPhase(room), 5000);
+        }
+    }
+}
+
+function checkGameStatus(room) {
+    const r = rooms[room];
+    if (!r) return false;
+
+    const wolves = r.players.filter(p => p.role === "Werwolf" && p.alive);
+    const villagers = r.players.filter(p => p.role === "Dorfbewohner" && p.alive);
+
+    // Werwölfe haben gewonnen, wenn sie gleich viele oder mehr sind als Dorfbewohner
+    if (wolves.length >= villagers.length) {
+        endGame(room, "Werwölfe");
+        return true;
+    }
+
+    // Dorfbewohner haben gewonnen, wenn alle Werwölfe tot sind
+    if (wolves.length === 0) {
+        endGame(room, "Dorfbewohner");
+        return true;
+    }
+
+    return false;
+}
+
+function endGame(room, winner) {
+    const r = rooms[room];
+    if (!r) return;
+
+    r.phase = "gameOver";
+
+    io.to(room).emit("gameOver", {
+        winner,
+        players: r.players.map(p => ({
+            id: p.id,
+            name: p.name,
+            role: p.role,
+            alive: p.alive
+        }))
+    });
+
+    // Raum nach 1 Minute löschen
+    setTimeout(() => {
+        delete rooms[room];
+    }, 60000);
 }

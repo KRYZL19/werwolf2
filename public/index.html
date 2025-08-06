@@ -12,33 +12,82 @@
             padding: 20px;
             max-width: 400px;
             margin: auto;
-            background: var(--bs-body-bg);
-            color: var(--bs-body-color);
-            transition: background 0.3s, color 0.3s;
+            background-color: #f8f9fa;
+            color: #333;
+            transition: background 0.5s, color 0.5s;
         }
+
+        /* Tag/Nacht Phasen */
+        .day-phase {
+            background-color: #f8f9fa;
+            color: #333;
+            position: relative;
+        }
+        .day-phase::before {
+            content: "☀️";
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            font-size: 24px;
+        }
+        .night-phase {
+            background-color: #121212;
+            color: #ddd;
+            position: relative;
+        }
+        .night-phase::before {
+            content: "🌙";
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            font-size: 24px;
+        }
+
+        /* Spielelemente */
+        #menu, #game, #roleDisplay, #nightPhase, #dayPhase, #deathAnnouncement {
+            display: none;
+            margin-top: 20px;
+        }
+        #menu { display: block; }
+
+        /* Rollen-Farben */
         .role-wolf {
-            color: #b30000 !important;
+            color: #b30000;
         }
         .role-villager {
-            color: #00bfff !important;
+            color: #00bfff;
         }
-        .darkmode .role-wolf,
-        .darkmode .role-villager {
-            color: #fff !important;
-            text-shadow: 0 0 8px #b30000, 0 0 2px #00bfff;
+        .night-phase .role-wolf,
+        .night-phase .role-villager {
+            color: #fff;
         }
-        .darkmode {
-            background: #181a1b !important;
-            color: #fff !important;
-        }
-        #game, #roleDisplay { display: none; margin-top: 20px; }
-        .animate-role {
+
+        /* Animationen */
+        .animate-text {
             opacity: 0;
             transition: opacity 0.3s;
         }
-        .animate-role.visible {
+        .animate-text.visible {
             opacity: 1;
         }
+
+        /* Voting-Elemente */
+        .vote-btn {
+            display: block;
+            width: 100%;
+            margin: 5px 0;
+            text-align: left;
+            transition: background-color 0.3s;
+        }
+        .vote-btn.selected {
+            background-color: #dc3545;
+            color: white;
+        }
+        .vote-btn.targeted {
+            background-color: #ffc107;
+            color: black;
+        }
+
         @media (max-width: 600px) {
             body { padding: 10px; max-width: 100%; }
         }
@@ -47,14 +96,12 @@
 <body>
 <div class="d-flex justify-content-between align-items-center mb-3">
     <h2 class="mb-0">Werwolf Spiel</h2>
-    <button id="toggleDark" class="btn btn-outline-secondary btn-sm" title="Darkmode umschalten">
-        🌙
-    </button>
+    <div id="gameStatus" class="badge bg-secondary">Warte auf Spielstart</div>
 </div>
 
 <div id="menu" class="card p-3 shadow-sm">
-    <input id="name" class="form-control" placeholder="Dein Name" />
-    <input id="room" class="form-control" placeholder="Raum ID" />
+    <input id="name" class="form-control mb-2" placeholder="Dein Name" />
+    <input id="room" class="form-control mb-2" placeholder="Raum ID" />
 
     <button class="btn btn-primary mt-2" onclick="joinRoom()">Raum beitreten</button>
     <hr />
@@ -74,29 +121,59 @@
 <div id="game" class="card p-3 shadow-sm mt-3">
     <h3>Warte auf Mitspieler...</h3>
     <p id="playerList"></p>
+    <div class="progress mt-2">
+        <div id="playerProgress" class="progress-bar" role="progressbar" style="width: 0%"></div>
+    </div>
 </div>
 
 <div id="roleDisplay" class="card p-3 shadow-sm mt-3 text-center">
     <h3>Deine Rolle:</h3>
     <h2 id="roleText" class="fw-bold"></h2>
+    <p id="roleDescription" class="mt-3"></p>
+</div>
+
+<div id="nightPhase" class="card p-3 shadow-sm mt-3 text-center">
+    <h3 class="mb-4">Das Dorf schläft ein...</h3>
+    <!-- Für Werwölfe -->
+    <div id="wolfVote" style="display: none;">
+        <h4 class="text-danger mb-3">Wähle dein Opfer:</h4>
+        <div id="wolfVoteButtons" class="d-grid gap-2"></div>
+        <p class="mt-3 fst-italic">Ihr müsst euch auf ein Opfer einigen.</p>
+    </div>
+    <!-- Für Dorfbewohner -->
+    <div id="villagerNight">
+        <p class="mb-4">Schließe deine Augen und warte...</p>
+        <div class="d-flex justify-content-center">
+            <div class="spinner-border text-light" role="status">
+                <span class="visually-hidden">Warten...</span>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div id="deathAnnouncement" class="card p-3 shadow-sm mt-3 text-center">
+    <h3 id="deathText" class="animate-text">Gestorben ist...</h3>
+    <h2 id="victimName" class="fw-bold animate-text mt-3"></h2>
+</div>
+
+<div id="dayPhase" class="card p-3 shadow-sm mt-3">
+    <h3 class="text-center mb-4">Wer ist der Werwolf?</h3>
+    <div id="dayVoteButtons" class="d-grid gap-2"></div>
+    <div class="mt-3 text-center">
+        <div id="votingTimer" class="badge bg-primary mb-2">Abstimmung: 60s</div>
+        <button id="confirmVote" class="btn btn-danger" disabled>Stimme abgeben</button>
+    </div>
 </div>
 
 <script src="/socket.io/socket.io.js"></script>
-<!-- Bootstrap JS (für Button-Styles, nicht zwingend nötig für Funktion) -->
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
 <script>
     const socket = io();
     let name = "", room = "";
-    let darkmode = false;
-
-    // Darkmode Umschalter
-    document.getElementById('toggleDark').onclick = function() {
-        darkmode = !darkmode;
-        document.body.classList.toggle('darkmode', darkmode);
-        // Schriftfarbe für Rolle ggf. anpassen
-        const roleText = document.getElementById('roleText');
-        if (roleText.dataset.role) setRoleColor(roleText.dataset.role);
-    };
+    let myRole = "";
+    let alivePlayers = [];
+    let myVote = null;
+    let wolfTarget = null;
 
     function createRoom() {
         name = document.getElementById("name").value;
@@ -108,6 +185,7 @@
         socket.emit("createRoom", { name, room, wolves, maxPlayers });
         document.getElementById("menu").style.display = "none";
         document.getElementById("game").style.display = "block";
+        document.getElementById("gameStatus").textContent = "Lobby";
     }
 
     function joinRoom() {
@@ -118,20 +196,34 @@
         socket.emit("joinRoom", { name, room });
         document.getElementById("menu").style.display = "none";
         document.getElementById("game").style.display = "block";
+        document.getElementById("gameStatus").textContent = "Lobby";
     }
 
     socket.on("updatePlayerList", (players) => {
-        document.getElementById("playerList").textContent = players.join(", ");
+        const playerList = document.getElementById("playerList");
+        playerList.textContent = players.map(p => p.name).join(", ");
+
+        // Spielerliste für spätere Verwendung speichern
+        alivePlayers = players;
+
+        // Fortschrittsbalken aktualisieren
+        const room = rooms[roomId];
+        if (room) {
+            const progress = (players.length / room.maxPlayers) * 100;
+            document.getElementById("playerProgress").style.width = `${progress}%`;
+        }
     });
 
     // Animierte Rollenzuweisung
     socket.on("showRole", (role) => {
         document.getElementById("game").style.display = "none";
         document.getElementById("roleDisplay").style.display = "block";
+        document.getElementById("gameStatus").textContent = "Rollenverteilung";
+
         const roleText = document.getElementById("roleText");
         roleText.textContent = "";
-        roleText.className = "fw-bold animate-role";
-        roleText.dataset.role = role;
+        roleText.className = "fw-bold animate-text";
+        myRole = role;
 
         // Animation: "Du..." -> "Du... bist..." -> "Du... bist... [Rolle]"
         let steps = [
@@ -158,6 +250,14 @@
                     roleText.textContent = role;
                     setRoleColor(role);
                     roleText.className = "fw-bold";
+
+                    // Rollenbeschreibung anzeigen
+                    const desc = document.getElementById("roleDescription");
+                    if (role === "Werwolf") {
+                        desc.textContent = "Deine Aufgabe: Wähle nachts mit den anderen Werwölfen ein Opfer. Verberge tagsüber deine Identität.";
+                    } else {
+                        desc.textContent = "Deine Aufgabe: Finde heraus, wer die Werwölfe sind und stimme bei Tag gegen sie ab.";
+                    }
                 }, 1000);
             }
         }
@@ -166,13 +266,6 @@
 
     function setRoleColor(role) {
         const roleText = document.getElementById('roleText');
-        if (darkmode) {
-            roleText.style.color = "#fff";
-        } else if (role === "Werwolf") {
-            roleText.style.color = "#b30000";
-        } else {
-            roleText.style.color = "#00bfff";
-        }
         if (role === "Werwolf") {
             roleText.classList.add("role-wolf");
             roleText.classList.remove("role-villager");
@@ -181,6 +274,178 @@
             roleText.classList.remove("role-wolf");
         }
     }
+
+    // Nachtphase starten
+    socket.on("startNight", () => {
+        document.getElementById("roleDisplay").style.display = "none";
+        document.getElementById("dayPhase").style.display = "none";
+        document.getElementById("nightPhase").style.display = "block";
+        document.getElementById("gameStatus").textContent = "Nacht";
+        document.body.classList.add("night-phase");
+        document.body.classList.remove("day-phase");
+
+        // Werwolf-Voting vorbereiten
+        if (myRole === "Werwolf") {
+            document.getElementById("wolfVote").style.display = "block";
+            document.getElementById("villagerNight").style.display = "none";
+
+            // Voting-Buttons erstellen
+            const wolfVoteButtons = document.getElementById("wolfVoteButtons");
+            wolfVoteButtons.innerHTML = "";
+
+            alivePlayers.forEach(player => {
+                if (player.role !== "Werwolf") { // Werwölfe können keine Werwölfe wählen
+                    const btn = document.createElement("button");
+                    btn.className = "btn btn-outline-light vote-btn";
+                    btn.textContent = player.name;
+                    btn.dataset.player = player.id;
+                    btn.onclick = function() {
+                        // Alle Buttons zurücksetzen
+                        document.querySelectorAll(".vote-btn").forEach(b =>
+                            b.classList.remove("selected"));
+                        // Diesen Button auswählen
+                        this.classList.add("selected");
+                        // Vote an Server senden
+                        wolfTarget = player.id;
+                        socket.emit("wolfVote", { room, target: player.id });
+                    };
+                    wolfVoteButtons.appendChild(btn);
+                }
+            });
+        } else {
+            document.getElementById("wolfVote").style.display = "none";
+            document.getElementById("villagerNight").style.display = "block";
+        }
+    });
+
+    // Werwolf-Votes aktualisieren (für alle Werwölfe)
+    socket.on("updateWolfVotes", (votes) => {
+        if (myRole !== "Werwolf") return;
+
+        // Alle Buttons zurücksetzen
+        document.querySelectorAll(".vote-btn").forEach(btn =>
+            btn.classList.remove("targeted"));
+
+        // Anzeigen, welche Spieler von anderen Werwölfen anvisiert werden
+        for (const [wolfId, targetId] of Object.entries(votes)) {
+            if (wolfId !== socket.id) { // Nicht meine eigene Stimme
+                const targetBtn = document.querySelector(`.vote-btn[data-player="${targetId}"]`);
+                if (targetBtn) targetBtn.classList.add("targeted");
+            }
+        }
+    });
+
+    // Tod-Ankündigung
+    socket.on("announceVictim", (victim) => {
+        document.getElementById("nightPhase").style.display = "none";
+        document.getElementById("deathAnnouncement").style.display = "block";
+        document.getElementById("gameStatus").textContent = "Morgengrauen";
+
+        const deathText = document.getElementById("deathText");
+        const victimName = document.getElementById("victimName");
+
+        deathText.textContent = "Gestorben ist...";
+        deathText.classList.add("visible");
+
+        // Nach einer Sekunde den Namen anzeigen
+        setTimeout(() => {
+            victimName.textContent = victim.name;
+            victimName.classList.add("visible");
+
+            // Nach weiteren 3 Sekunden zur Tagphase übergehen
+            setTimeout(() => {
+                socket.emit("readyForDay", { room });
+            }, 3000);
+        }, 1000);
+    });
+
+    // Tagphase starten
+    socket.on("startDay", (data) => {
+        document.getElementById("deathAnnouncement").style.display = "none";
+        document.getElementById("dayPhase").style.display = "block";
+        document.getElementById("gameStatus").textContent = "Tag";
+        document.body.classList.remove("night-phase");
+        document.body.classList.add("day-phase");
+
+        // Voting-Buttons erstellen
+        const dayVoteButtons = document.getElementById("dayVoteButtons");
+        dayVoteButtons.innerHTML = "";
+
+        alivePlayers.forEach(player => {
+            if (player.id !== socket.id && player.alive) { // Kann nicht sich selbst wählen
+                const btn = document.createElement("button");
+                btn.className = "btn btn-outline-dark vote-btn";
+                btn.textContent = player.name;
+                btn.dataset.player = player.id;
+                btn.onclick = function() {
+                    // Alle Buttons zurücksetzen
+                    document.querySelectorAll(".vote-btn").forEach(b =>
+                        b.classList.remove("selected"));
+                    // Diesen Button auswählen
+                    this.classList.add("selected");
+                    // Vote speichern
+                    myVote = player.id;
+                    // Abstimm-Button aktivieren
+                    document.getElementById("confirmVote").disabled = false;
+                };
+                dayVoteButtons.appendChild(btn);
+            }
+        });
+
+        // Abstimm-Button
+        document.getElementById("confirmVote").onclick = function() {
+            if (myVote) {
+                socket.emit("dayVote", { room, target: myVote });
+                this.disabled = true;
+                this.textContent = "Stimme abgegeben";
+                dayVoteButtons.querySelectorAll("button").forEach(btn => {
+                    btn.disabled = true;
+                });
+            }
+        };
+
+        // Timer starten
+        let timeLeft = 60;
+        const timerElement = document.getElementById("votingTimer");
+        const timer = setInterval(() => {
+            timeLeft--;
+            timerElement.textContent = `Abstimmung: ${timeLeft}s`;
+            if (timeLeft <= 0) {
+                clearInterval(timer);
+                timerElement.textContent = "Abstimmung beendet";
+                // Automatisch abstimmen, falls noch nicht getan
+                if (!document.getElementById("confirmVote").disabled) {
+                    document.getElementById("confirmVote").click();
+                }
+            }
+        }, 1000);
+    });
+
+    // Spielende
+    socket.on("gameOver", (result) => {
+        document.getElementById("nightPhase").style.display = "none";
+        document.getElementById("dayPhase").style.display = "none";
+        document.getElementById("deathAnnouncement").style.display = "none";
+
+        const gameDiv = document.getElementById("game");
+        gameDiv.style.display = "block";
+        gameDiv.innerHTML = `
+            <h2 class="text-center mb-4">${result.winner} haben gewonnen!</h2>
+            <div class="card p-3">
+                <h4>Spieler:</h4>
+                <ul class="list-group">
+                    ${result.players.map(p => `
+                        <li class="list-group-item d-flex justify-content-between align-items-center">
+                            ${p.name}
+                            <span class="badge ${p.role === 'Werwolf' ? 'bg-danger' : 'bg-primary'}">${p.role}</span>
+                        </li>
+                    `).join('')}
+                </ul>
+            </div>
+            <button class="btn btn-primary mt-3 w-100" onclick="location.reload()">Neues Spiel</button>
+        `;
+        document.getElementById("gameStatus").textContent = "Spiel beendet";
+    });
 
     socket.on("errorMessage", (msg) => {
         alert(msg);
