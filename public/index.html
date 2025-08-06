@@ -970,23 +970,34 @@
 
     // Spielende
     socket.on("gameOver", (result) => {
-        // Alle UI-Elemente ausblenden, außer ripScreen für tote Spieler
+        console.log("SPIEL BEENDET mit Gewinner:", result.winner);
+
+        // Stoppe alle laufenden Timer
+        for (let id of Object.keys(window)) {
+            if (typeof id === 'number') {
+                clearTimeout(id);
+                clearInterval(id);
+            }
+        }
+
+        // Alle UI-Elemente ausblenden
         document.getElementById("nightPhase").style.display = "none";
         document.getElementById("dayPhase").style.display = "none";
         document.getElementById("deathAnnouncement").style.display = "none";
 
-        console.log("Spielende erreicht! Gewinner:", result.winner);
+        // Auch für tote Spieler den RIP-Screen ausblenden
+        if (amIDead) {
+            document.getElementById("ripScreen").style.display = "none";
+        }
 
-        // Gewinn-Animation basierend auf Sieger, auch für tote Spieler
+        // Setze globalen Spielstatus
+        document.getElementById("gameStatus").textContent = "Spiel beendet - " + result.winner + " gewinnen";
+
+        // Gewinn-Animation basierend auf Sieger
         playWinAnimation(result.winner);
 
         // Nach Animation Spielergebnisse anzeigen
         setTimeout(() => {
-            // Auch für tote Spieler den RIP-Screen ausblenden
-            if (amIDead) {
-                document.getElementById("ripScreen").style.display = "none";
-            }
-
             const gameDiv = document.getElementById("game");
             gameDiv.style.display = "block";
 
@@ -1036,7 +1047,6 @@
                     </div>
                 </div>
             `;
-            document.getElementById("gameStatus").textContent = "Spiel beendet";
 
             // Disabled-Status für tote Spieler bei "Bereit" setzen
             if (amIDead) {
@@ -1046,59 +1056,36 @@
         }, 3500);
     });
 
-    function playAgain() {
-        // Wenn tot, nicht teilnehmen können
-        if (amIDead) return;
-
-        readyForNextGame = true;
-        socket.emit("playAgain", { room, name });
-
-        // Button-Zustand ändern
-        const readyButton = document.getElementById("readyButton");
-        readyButton.classList.add("active");
-        readyButton.innerHTML = '<i class="bi bi-check-circle-fill"></i> Bereit!';
-        readyButton.disabled = true;
-
-        const gameDiv = document.getElementById("game");
-        gameDiv.innerHTML += `
-            <div class="alert alert-success mt-3">
-                <h4 id="waitingMessage">Warte auf weitere Spieler...</h4>
-                <p id="playerList"></p>
-                <div class="progress mt-2">
-                    <div id="playerProgress" class="progress-bar bg-success" role="progressbar" style="width: 0%"></div>
-                </div>
-                <button class="btn btn-outline-danger mt-3" onclick="leaveRoom()">Spiel verlassen</button>
-            </div>
-        `;
-        document.getElementById("gameStatus").textContent = "Lobby";
-    }
-
-    // Versions-Details ein-/ausblenden
-    function toggleVersionDetails() {
-        const details = document.getElementById('versionDetails');
-        const toggle = document.querySelector('.toggle-details');
-        if (details.style.display === 'block') {
-            details.style.display = 'none';
-            toggle.textContent = 'Details anzeigen';
-        } else {
-            details.style.display = 'block';
-            toggle.textContent = 'Details ausblenden';
-        }
-    }
-
     function playWinAnimation(winner) {
+        console.log("Starte Gewinn-Animation für:", winner);
+
+        // Container vorbereiten
         const animationContainer = document.getElementById("winAnimation");
         animationContainer.style.display = "block";
         animationContainer.innerHTML = "";  // Bestehende Inhalte löschen
 
-        console.log("Starte Sieger-Animation für:", winner);
-
         if (winner === "Werwölfe") {
-            // Blutverschmierte Animation
+            // Klasse für roten Hintergrund-Effekt
             animationContainer.className = "blood-animation";
 
+            // Titel für Werwolf-Sieg hinzufügen (vor den Blutflecken)
+            const wolfTitle = document.createElement("div");
+            wolfTitle.style.position = "absolute";
+            wolfTitle.style.top = "40%";
+            wolfTitle.style.left = "0";
+            wolfTitle.style.width = "100%";
+            wolfTitle.style.textAlign = "center";
+            wolfTitle.style.color = "#ffffff";
+            wolfTitle.style.fontSize = "3rem";
+            wolfTitle.style.textShadow = "0 0 10px #ff0000";
+            wolfTitle.style.fontWeight = "bold";
+            wolfTitle.style.zIndex = "2001"; // Vor Blutflecken anzeigen
+            wolfTitle.textContent = "DIE WERWÖLFE HABEN GEWONNEN";
+
+            animationContainer.appendChild(wolfTitle);
+
             // Blutflecken hinzufügen
-            for (let i = 0; i < 15; i++) { // Mehr Blutflecken für dramatischeren Effekt
+            for (let i = 0; i < 15; i++) {
                 const splash = document.createElement("div");
                 splash.className = "blood-splash";
 
@@ -1107,7 +1094,7 @@
                 splash.style.top = `${Math.random() * 80 + 10}%`;
 
                 // Zufällige Größe
-                const size = Math.random() * 150 + 50; // Größere Blutflecken
+                const size = Math.random() * 150 + 50;
                 splash.style.width = `${size}px`;
                 splash.style.height = `${size}px`;
 
@@ -1120,38 +1107,19 @@
                 animationContainer.appendChild(splash);
             }
 
-            // Wolf-Titel hinzufügen
-            const wolfTitle = document.createElement("div");
-            wolfTitle.style.position = "absolute";
-            wolfTitle.style.top = "40%";
-            wolfTitle.style.width = "100%";
-            wolfTitle.style.textAlign = "center";
-            wolfTitle.style.color = "#ffffff";
-            wolfTitle.style.fontSize = "3rem";
-            wolfTitle.style.textShadow = "0 0 10px #ff0000";
-            wolfTitle.style.fontWeight = "bold";
-            wolfTitle.style.opacity = "0";
-            wolfTitle.style.animation = "fadeIn 1s 1s forwards";
-            wolfTitle.textContent = "DIE WERWÖLFE HABEN GEWONNEN";
-
-            // CSS für den Titel hinzufügen
-            const titleStyle = document.createElement("style");
-            titleStyle.textContent = `
+            // CSS für die Titelanimation
+            const styleEl = document.createElement('style');
+            styleEl.textContent = `
                 @keyframes fadeIn {
-                    from { opacity: 0; }
-                    to { opacity: 1; }
+                    from { opacity: 0; transform: scale(0.9); }
+                    to { opacity: 1; transform: scale(1); }
                 }
             `;
-            document.head.appendChild(titleStyle);
+            document.head.appendChild(styleEl);
 
-            animationContainer.appendChild(wolfTitle);
-
-            // Animation nach 3.5 Sekunden entfernen
-            setTimeout(() => {
-                animationContainer.style.display = "none";
-                animationContainer.innerHTML = "";
-                animationContainer.className = "";
-            }, 3500);
+            // Titel mit Animation einblenden
+            wolfTitle.style.opacity = "0";
+            wolfTitle.style.animation = "fadeIn 1.5s ease-out 0.5s forwards";
 
         } else {
             // Konfetti-Animation für Dorfbewohner
@@ -1159,69 +1127,63 @@
             confettiContainer.className = "confetti-container";
             animationContainer.appendChild(confettiContainer);
 
-            // 150 Konfetti-Teilchen erstellen für mehr Feierstimmung
-            for (let i = 0; i < 150; i++) {
-                createConfetti(confettiContainer);
-            }
-
-            // Sieges-Titel hinzufügen
+            // Sieges-Titel für Dorfbewohner
             const villagerTitle = document.createElement("div");
             villagerTitle.style.position = "absolute";
             villagerTitle.style.top = "40%";
+            villagerTitle.style.left = "0";
             villagerTitle.style.width = "100%";
             villagerTitle.style.textAlign = "center";
             villagerTitle.style.color = "#ffffff";
             villagerTitle.style.fontSize = "3rem";
             villagerTitle.style.textShadow = "0 0 10px #00aaff";
             villagerTitle.style.fontWeight = "bold";
-            villagerTitle.style.opacity = "0";
-            villagerTitle.style.animation = "fadeIn 1s 1s forwards";
+            villagerTitle.style.zIndex = "2001"; // Vor Konfetti anzeigen
             villagerTitle.textContent = "DIE DORFBEWOHNER HABEN GEWONNEN";
 
             animationContainer.appendChild(villagerTitle);
 
-            // Animation nach 3.5 Sekunden entfernen
-            setTimeout(() => {
-                animationContainer.style.display = "none";
-                animationContainer.innerHTML = "";
-            }, 3500);
-        }
-    }
+            // 150 Konfetti-Teilchen erstellen
+            for (let i = 0; i < 150; i++) {
+                createConfetti(confettiContainer);
+            }
 
-    function createConfetti(container) {
-        const confetti = document.createElement("div");
-        confetti.className = "confetti";
-
-        // Zufällige Farbe
-        const colors = ["#f94144", "#f3722c", "#f8961e", "#f9c74f", "#90be6d", "#43aa8b", "#577590", "#277da1"];
-        confetti.style.backgroundColor = colors[Math.floor(Math.random() * colors.length)];
-
-        // Zufällige Form
-        if (Math.random() > 0.5) {
-            confetti.style.borderRadius = "50%";
+            // Titel mit Animation einblenden
+            villagerTitle.style.opacity = "0";
+            villagerTitle.style.animation = "fadeIn 1.5s ease-out 0.5s forwards";
         }
 
-        // Zufällige Position
-        const startLeft = Math.random() * 100;
-        confetti.style.left = `${startLeft}%`;
-        confetti.style.top = "-20px";
-
-        // Animation mit CSS
-        const duration = Math.random() * 3 + 2;
-        const delay = Math.random() * 1;
-
-        confetti.style.animation = `
-            fallDown ${duration}s ease-in ${delay}s forwards,
-            sideMovement ${duration * 0.5}s ease-in-out ${delay}s alternate infinite
-        `;
-
-        container.appendChild(confetti);
+        // Animation nach 3.5 Sekunden entfernen
+        setTimeout(() => {
+            animationContainer.style.display = "none";
+            animationContainer.innerHTML = "";
+            animationContainer.className = "";
+        }, 3500);
     }
 
-    socket.on("errorMessage", (msg) => {
-        alert(msg);
-        location.reload();
-    });
+    // Versionsinfo aktualisieren
+    document.getElementById('versionInfo').innerHTML = `
+        v1.3.0 <span class="toggle-details" onclick="toggleVersionDetails()">Details anzeigen</span>
+        <div id="versionDetails">
+            <p><strong>v1.3.0</strong> (aktuelle Version):</p>
+            <ul>
+                <li>Siegesüberprüfung verbessert</li>
+                <li>Siegesanimationen zuverlässiger gemacht</li>
+                <li>Endkarte für alle Spieler sichtbar</li>
+            </ul>
+            <p><strong>v1.2.0</strong>:</p>
+            <ul>
+                <li>Siegesbildschirme für Werwölfe/Dorfbewohner korrigiert</li>
+                <li>Versions-Informationen hinzugefügt</li>
+            </ul>
+            <p><strong>v1.1.0</strong>:</p>
+            <ul>
+                <li>Geisterflüstern für tote Spieler</li>
+                <li>Skip-Button für Abstimmungen</li>
+                <li>50% Mindestquote für Eliminierungen</li>
+            </ul>
+        </div>
+    `;
 </script>
 </body>
 </html>

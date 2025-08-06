@@ -457,6 +457,14 @@ function checkGameStatus(room) {
 
     console.log(`Prüfe Spielstatus: ${wolves.length} Werwölfe vs ${villagers.length} Dorfbewohner`);
 
+    // Siegbedingung protokollieren für bessere Fehlersuche
+    if (wolves.length >= villagers.length) {
+        console.log("SIEGBEDINGUNG ERFÜLLT: Werwölfe haben gleich viele oder mehr Spieler als Dorfbewohner");
+    }
+    if (wolves.length === 0) {
+        console.log("SIEGBEDINGUNG ERFÜLLT: Alle Werwölfe sind tot");
+    }
+
     // Prüfen, ob genug Spieler übrig sind
     if (wolves.length + villagers.length < 3) {
         console.log("Zu wenige Spieler übrig, beende Spiel");
@@ -490,6 +498,12 @@ function endGame(room, winner) {
     const r = rooms[room];
     if (!r) return;
 
+    // Sicherstellen, dass der Raum nicht schon im gameOver-Zustand ist
+    if (r.phase === "gameOver") {
+        console.log(`Spiel in Raum ${room} ist bereits beendet.`);
+        return;
+    }
+
     r.phase = "gameOver";
     r.started = false;
     r.readyForNextGame = [];
@@ -515,6 +529,15 @@ function endGame(room, winner) {
         return 0;
     });
 
+    // Sicherstellen, dass alle Spieler das Ereignis empfangen
+    for (const player of r.players) {
+        io.to(player.id).emit("gameOver", {
+            winner,
+            players: sortedPlayers
+        });
+    }
+
+    // Zusätzlich an den ganzen Raum senden
     io.to(room).emit("gameOver", {
         winner,
         players: sortedPlayers
