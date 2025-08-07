@@ -221,7 +221,7 @@ io.on("connection", (socket) => {
 
             if (poison && !r.witchPoisonUsed) {
                 const targetPlayer = r.players.find(p => p.id === poison && p.alive);
-                if (targetPlayer) {
+                if (targetPlayer && targetPlayer.id !== witch.id) {
                     r.witchPoisonUsed = true;
                     r.poisonVictim = targetPlayer.id;
                 }
@@ -483,7 +483,7 @@ function startWitchStage(room) {
     if (witch) {
         r.nightStage = "witch";
         const victimPlayer = r.players.find(p => p.id === r.nightVictim);
-        const options = r.players.filter(p => p.alive && p.id !== witch.id).map(p => ({ id: p.id, name: p.name }));
+        const options = r.players.filter(p => p.alive).map(p => ({ id: p.id, name: p.name }));
         io.to(witch.id).emit("witchChoose", {
             victim: victimPlayer ? { id: victimPlayer.id, name: victimPlayer.name } : null,
             healUsed: r.witchHealUsed,
