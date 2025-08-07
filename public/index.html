@@ -458,9 +458,14 @@
 <div id="winAnimation"></div>
 
 <div id="versionInfo">
-    v1.10.2 <span class="toggle-details" onclick="toggleVersionDetails()">Details anzeigen</span>
+    v1.10.3 <span class="toggle-details" onclick="toggleVersionDetails()">Details anzeigen</span>
     <div id="versionDetails">
-        <p><strong>v1.10.2</strong> (aktuelle Version):</p>
+        <p><strong>v1.10.3</strong> (aktuelle Version):</p>
+        <ul>
+            <li>Speichern des Spielernamens zwischen Spielrunden</li>
+            <li>Verbesserte Werwolf-Auswahl: 2 Werwölfe ab 6 Spielern, 3 Werwölfe ab 9 Spielern</li>
+        </ul>
+        <p><strong>v1.10.2</strong>:</p>
         <ul>
             <li>Entfernung des überflüssigen "Raum beitreten"-Buttons</li>
             <li>Intelligente Werwolf-Auswahl: 2 Werwölfe erst ab 7 Spielern, 3 Werwölfe ab 10 Spielern</li>
@@ -526,9 +531,66 @@
 
     let deadChatMessages = [];
 
+    // Laden des gespeicherten Namens beim Seitenstart
+    window.addEventListener('DOMContentLoaded', () => {
+        const savedName = localStorage.getItem('playerName');
+        if (savedName) {
+            document.getElementById('name').value = savedName;
+        }
+    });
+
+    // Funktion zum Speichern des Namens
+    function saveName() {
+        const nameInput = document.getElementById('name').value.trim();
+        if (nameInput) {
+            localStorage.setItem('playerName', nameInput);
+        }
+    }
+
     fetchAvailableRooms();
 
     setInterval(fetchAvailableRooms, 5000);
+
+    // Funktion zum Aktualisieren der Werwolf-Optionen basierend auf der Spieleranzahl
+    function updateWolfOptions() {
+        const maxPlayers = parseInt(document.getElementById("maxPlayers").value);
+        const wolvesSelect = document.getElementById("wolves");
+
+        // Alle Optionen entfernen
+        while (wolvesSelect.firstChild) {
+            wolvesSelect.removeChild(wolvesSelect.firstChild);
+        }
+
+        // Option 1 ist immer verfügbar
+        const option1 = document.createElement('option');
+        option1.value = "1";
+        option1.text = "1";
+        wolvesSelect.appendChild(option1);
+
+        // Option 2 ab 6 Spielern (geändert von 7)
+        if (maxPlayers >= 6) {
+            const option2 = document.createElement('option');
+            option2.value = "2";
+            option2.text = "2";
+            wolvesSelect.appendChild(option2);
+        }
+
+        // Option 3 ab 9 Spielern (geändert von 10)
+        if (maxPlayers >= 9) {
+            const option3 = document.createElement('option');
+            option3.value = "3";
+            option3.text = "3";
+            wolvesSelect.appendChild(option3);
+        }
+
+        // Sicherstellen, dass die Werwolf-Anzahl nicht zu hoch ist
+        if (parseInt(wolvesSelect.value) > wolvesSelect.options.length) {
+            wolvesSelect.value = "1";
+        }
+    }
+
+    // Initial die Werwolf-Optionen aktualisieren
+    updateWolfOptions();
 
     function fetchAvailableRooms() {
         socket.emit("getAvailableRooms");
@@ -569,6 +631,9 @@
         name = nameInput;
         room = roomId;
 
+        // Namen speichern
+        saveName();
+
         // Direkt beitreten ohne auf den Button zu klicken
         socket.emit("joinRoom", { name, room });
         document.getElementById("menu").style.display = "none";
@@ -584,6 +649,10 @@
         maxPlayersInRoom = maxPlayers;
 
         if (!name || !room) return alert("Name und Raum-ID eingeben!");
+
+        // Namen speichern
+        saveName();
+
         socket.emit("createRoom", { name, room, wolves, maxPlayers });
         document.getElementById("menu").style.display = "none";
         document.getElementById("game").style.display = "block";
