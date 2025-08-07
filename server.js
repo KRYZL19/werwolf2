@@ -539,41 +539,30 @@ function finalizeNight(room) {
 
     deaths.forEach(v => r.victims.push(v));
 
-    if (deaths.length > 0) {
-        r.phase = "announcement";
-        // Sende alle Opfer als Liste
-        io.to(room).emit("announceVictim", deaths.map(v => ({ id: v.id, name: v.name })));
-        const gameContinues = !checkGameStatus(room);
-        if (gameContinues) {
-            deaths.forEach(v => {
-                io.to(v.id).emit("playerEliminated", v.id);
-            });
-        }
-    } else {
-        r.phase = "announcement";
-        io.to(room).emit("announceVictim", { id: null, name: "Niemand" });
-        checkGameStatus(room);
-    }
-}
+    r.phase = "announcement";
+    // Sende alle Opfer als Liste (Klartext)
+    const victimNames = deaths.length > 0 ? deaths.map(v => v.name).join(", ") : "Niemand";
+    io.to(room).emit("announceVictim", { names: victimNames, victims: deaths.map(v => ({ id: v.id, name: v.name })) });
 
-function checkLoverDeaths(room, currentDeaths = []) {
-    const r = rooms[room];
-    if (!r || r.lovers.length !== 2) return [];
-    const [id1, id2] = r.lovers;
-    const lover1 = r.players.find(p => p.id === id1);
-    const lover2 = r.players.find(p => p.id === id2);
-    const deaths = [];
-    if (lover1 && lover2) {
-        if (!lover1.alive && lover2.alive && !currentDeaths.includes(lover2)) {
-            lover2.alive = false;
-            deaths.push(lover2);
-        }
-        if (!lover2.alive && lover1.alive && !currentDeaths.includes(lover1)) {
-            lover1.alive = false;
-            deaths.push(lover1);
-        }
+    const gameContinues = !checkGameStatus(room);
+    if (gameContinues) {
+        deaths.forEach(v => {
+            io.to(v.id).emit("playerEliminated", v.id);
+        });
+        // Nach 3 Sekunden Tagesphase starten
+        setTimeout(() => {
+            r.phase = "day";
+            r.dayVotes = {};
+            const alivePlayers = r.players.filter(p => p.alive).map(p => ({
+                id: p.id,
+                name: p.name,
+                role: displayRole(p.role),
+                alive: true
+            }));
+            io.to(room).emit("startDay", { alivePlayers });
+        }, 3000);
     }
-    return deaths;
+    // Falls das Spiel vorbei ist, wird checkGameStatus das Spiel beenden
 }
 
 function endDayPhase(room) {
@@ -619,7 +608,7 @@ function endDayPhase(room) {
 
         if (mostVoted && maxVotes >= voteThreshold) {
             const victim = r.players.find(p => p.id === mostVoted);
-            if (victim && victim.alive) { // Nochmals prüfen, ob das Opfer lebt
+            if (victim && victim.alive) {
                 victim.alive = false;
                 r.victims.push(victim);
 
@@ -628,15 +617,10 @@ function endDayPhase(room) {
                     r.victims.push(ld);
                 });
 
-                // Allen Spielern das Opfer mitteilen
-                io.to(room).emit("announceVictim", {
-                    id: victim.id,
-                    name: victim.name,
-                    votes: maxVotes
-                });
-                loverDeaths.forEach(ld => {
-                    io.to(room).emit("announceVictim", { id: ld.id, name: ld.name });
-                });
+                // Ergebnis-Announcement für Tagopfer (Liste)
+                const allVictims = [victim, ...loverDeaths];
+                const victimNames = allVictims.length > 0 ? allVictims.map(v => v.name).join(", ") : "Niemand";
+                io.to(room).emit("announceVictim", { names: victimNames, victims: allVictims.map(v => ({ id: v.id, name: v.name })) });
 
                 // Spielstatus prüfen – RIP nur senden, wenn das Spiel weitergeht
                 if (checkGameStatus(room)) {
@@ -644,10 +628,7 @@ function endDayPhase(room) {
                 }
 
                 // Benachrichtigungen an Opfer
-                io.to(victim.id).emit("playerEliminated", victim.id);
-                loverDeaths.forEach(ld => {
-                    io.to(ld.id).emit("playerEliminated", ld.id);
-                });
+                allVictims.forEach(v => io.to(v.id).emit("playerEliminated", v.id));
 
                 // Aktualisierte Spielerliste senden
                 io.to(room).emit("updatePlayerList", r.players.map(p => ({
@@ -657,15 +638,15 @@ function endDayPhase(room) {
                     role: displayRole(p.role)
                 })));
 
-                // Nach 5 Sekunden die nächste Nachtphase starten
-                setTimeout(() => startNightPhase(room), 5000);
+                // Nach 3 Sekunden die nächste Nachtphase starten (Seher beginnt)
+                setTimeout(() => startNightPhase(room), 3000);
             } else {
-                // Wenn Opfer nicht mehr lebt (unwahrscheinlicher Edge-Case)
                 io.to(room).emit("noElimination");
+                setTimeout(() => startNightPhase(room), 2000);
             }
         } else {
-            // Wenn keine Mehrheit: "Niemand ist gestorben"
             io.to(room).emit("noElimination");
+            setTimeout(() => startNightPhase(room), 2000);
         }
     } catch (error) {
         console.error("Fehler beim Beenden der Tagesphase:", error);

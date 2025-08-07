@@ -1119,63 +1119,50 @@
         };
     });
 
-    // Mehrere Opfer in der Nacht anzeigen
-    socket.on("announceVictim", (victims) => {
-        // Nur anzeigen, wenn der Spieler lebt
+    // Mehrere Opfer in der Nacht oder am Tag anzeigen (immer als Liste)
+    socket.on("announceVictim", (data) => {
+        // data: { names: "Spieler 1, Spieler 2", victims: [{id, name}, ...] }
         if (!amIDead) {
             document.getElementById("nightPhase").style.display = "none";
+            document.getElementById("dayPhase").style.display = "none";
             document.getElementById("deathAnnouncement").style.display = "block";
             document.getElementById("gameStatus").textContent = "Morgengrauen";
 
             const deathText = document.getElementById("deathText");
             const victimList = document.getElementById("victimList");
 
-            deathText.textContent = "Gestorben sind...";
-            victimList.innerHTML = "";
-
-            if (Array.isArray(victims) && victims.length > 0) {
-                victims.forEach(v => {
+            if (data.victims && data.victims.length > 0) {
+                deathText.textContent = data.victims.length === 1
+                    ? `Gestorben ist ... ${data.names}`
+                    : `Gestorben sind ... ${data.names}`;
+                victimList.innerHTML = "";
+                data.victims.forEach(v => {
                     const el = document.createElement("div");
                     el.className = "fw-bold animate-text";
                     el.textContent = v.name;
-                    // Animation für das Element hinzufügen
                     setTimeout(() => {
                         el.classList.add("visible");
                     }, 300);
                     victimList.appendChild(el);
                 });
-            } else if (victims && victims.name) {
-                // Fallback für Einzelopfer
-                const el = document.createElement("div");
-                el.className = "fw-bold animate-text";
-                el.textContent = victims.name;
-                setTimeout(() => {
-                    el.classList.add("visible");
-                }, 300);
-                victimList.appendChild(el);
             } else {
-                const el = document.createElement("div");
-                el.className = "fw-bold animate-text";
-                el.textContent = "Niemand";
-                setTimeout(() => {
-                    el.classList.add("visible");
-                }, 300);
-                victimList.appendChild(el);
+                deathText.textContent = "Gestorben ist ... Niemand";
+                victimList.innerHTML = "";
             }
 
             // Prüfen, ob der Spieler selbst unter den Opfern ist
             let playerIsDead = false;
-            if (Array.isArray(victims)) {
-                playerIsDead = victims.some(v => v.id === socket.id);
-            } else if (victims && victims.id) {
-                playerIsDead = victims.id === socket.id;
+            if (data.victims && Array.isArray(data.victims)) {
+                playerIsDead = data.victims.some(v => v.id === socket.id);
             }
 
-            // Nach 3 Sekunden fortfahren
             setTimeout(() => {
                 if (playerIsDead) {
                     showRipScreen();
                 } else {
+                    // Unterscheide, ob dies ein Nacht- oder Tagopfer war:
+                    // Wenn die Tagesphase gerade vorbei ist, kommt jetzt die Nacht (Seher beginnt)
+                    // Wenn die Nachtphase vorbei ist, kommt jetzt die Tagesphase
                     socket.emit("readyForDay", { room });
                 }
             }, 3000);
