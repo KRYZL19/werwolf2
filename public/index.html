@@ -899,6 +899,7 @@
             }
         }
 
+        // Alle Spielscreens ausblenden, einschließlich des RIP-Screens
         document.querySelectorAll("#nightPhase, #dayPhase, #deathAnnouncement, #ripScreen").forEach(el => {
             el.style.display = "none";
         });
@@ -920,10 +921,10 @@
                         <h4 class="mb-3">Spieler:</h4>
                         <ul class="list-group">
                             ${result.players.map(p => {
-                const hasWon = (p.role === "Werwolf" && result.winner === "Werwölfe") ||
-                    (p.role === "Dorfbewohner" && result.winner === "Dorfbewohner");
-                const roleClass = p.role === "Werwolf" ? "player-role-wolf" : "player-role-villager";
-                return `
+                                const hasWon = (p.role === "Werwolf" && result.winner === "Werwölfe") ||
+                                    (p.role === "Dorfbewohner" && result.winner === "Dorfbewohner");
+                                const roleClass = p.role === "Werwolf" ? "player-role-wolf" : "player-role-villager";
+                                return `
                                     <li class="list-group-item d-flex justify-content-between align-items-center">
                                         <div>
                                             ${p.name}
@@ -934,30 +935,21 @@
                                             ${p.alive ? '' : '<span class="badge player-status-dead ms-1">☠️ Tot</span>'}
                                         </div>
                                     </li>`;
-            }).join('')}
+                            }).join('')}
                         </ul>
                         <div class="text-center mt-3 small text-muted">
                             <p>W = Gewonnen | L = Verloren</p>
                         </div>
                     </div>
                     <div class="card-footer bg-light">
-                        <div class="d-flex justify-content-between">
-                            <button id="readyButton" class="btn ready-button flex-grow-1 me-2" onclick="playAgain()">
-                                <i class="bi bi-check-circle"></i> Bereit für nächste Runde
-                            </button>
-                            <button class="btn btn-secondary flex-grow-1" onclick="location.reload()">
-                                Neues Spiel starten
+                        <div class="d-flex justify-content-center">
+                            <button class="btn btn-primary w-100" onclick="location.reload()">
+                                Zurück zum Hauptmenü
                             </button>
                         </div>
                     </div>
                 </div>
             `;
-
-            if (amIDead) {
-                document.getElementById("readyButton").classList.add("btn-outline-secondary");
-                document.getElementById("readyButton").classList.remove("ready-button");
-                document.getElementById("readyButton").innerHTML = '<i class="bi bi-ghost"></i> Als Geist teilnehmen';
-            }
         }, 3500);
     });
 
@@ -1057,30 +1049,6 @@
         }
 
         container.appendChild(confetti);
-    }
-
-    function playAgain() {
-        readyForNextGame = true;
-        socket.emit("playAgain", { room, name });
-
-        const readyButton = document.getElementById("readyButton");
-        readyButton.classList.add("active");
-        readyButton.innerHTML = '<i class="bi bi-check-circle-fill"></i> Bereit!';
-        readyButton.disabled = true;
-
-        const gameDiv = document.getElementById("game");
-        gameDiv.innerHTML = `
-            <div class="alert alert-success">
-                <h4 class="mb-3">Warte auf weitere Spieler in Raum: ${room}</h4>
-                <h5 id="waitingMessage">Bereit für nächste Runde...</h5>
-                <p id="playerList"></p>
-                <div class="progress mt-2">
-                    <div id="playerProgress" class="progress-bar bg-success" role="progressbar" style="width: 0%"></div>
-                </div>
-                <button class="btn btn-outline-danger mt-3" onclick="location.reload()">Spiel verlassen</button>
-            </div>
-        `;
-        document.getElementById("gameStatus").textContent = "Warte in Lobby";
     }
 
     function toggleVersionDetails() {

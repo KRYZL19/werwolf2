@@ -260,59 +260,10 @@ io.on("connection", (socket) => {
 
     socket.on("playAgain", ({ room, name }) => {
         try {
-            const r = rooms[room];
-            if (!r) return;
-
-            // Spieler als bereit für nächstes Spiel markieren
-            if (!r.readyForNextGame.includes(socket.id)) {
-                r.readyForNextGame.push(socket.id);
-            }
-
-            console.log(`Spieler ${name} ist bereit für die nächste Runde (${r.readyForNextGame.length}/${r.players.length})`);
-
-            // Update allen Spielern senden, wer bereit ist
-            io.to(room).emit("updatePlayerList", r.players.filter(p =>
-                r.readyForNextGame.includes(p.id)
-            ).map(p => ({
-                id: p.id,
-                name: p.name,
-                alive: true
-            })));
-
-            // Wenn genug Spieler bereit sind, neues Spiel starten
-            // Mindestens 4 Spieler oder Werwölfe + 2
-            const minPlayers = Math.max(4, r.wolves + 2);
-
-            if (r.readyForNextGame.length >= minPlayers &&
-                r.readyForNextGame.length >= Math.floor(r.players.length * 0.75)) { // mindestens 75% der Spieler
-
-                console.log(`Starte neue Runde mit ${r.readyForNextGame.length} Spielern`);
-
-                // Nur Spieler behalten, die bereit sind
-                r.players = r.players.filter(p => r.readyForNextGame.includes(p.id));
-
-                // Rollen zurücksetzen
-                r.players.forEach(p => {
-                    p.role = null;
-                    p.alive = true;
-                });
-
-                // Spielstatus zurücksetzen
-                r.started = true;
-                r.phase = "lobby";
-                r.wolfVotes = {};
-                r.dayVotes = {};
-                r.victims = [];
-                r.readyForNextGame = [];
-
-                // Alle benachrichtigen, dass ein neues Spiel beginnt
-                io.to(room).emit("gameStatus", { status: "Neues Spiel beginnt..." });
-
-                // Spiel starten
-                setTimeout(() => startGame(room), 3000);
-            }
+            // Ignorieren der Anfrage, da wir keine nächste Runde mehr im selben Raum erlauben
+            socket.emit("errorMessage", "Bitte kehre zum Hauptmenü zurück und erstelle einen neuen Raum.");
         } catch (error) {
-            console.error("Fehler beim Vorbereiten des nächsten Spiels:", error);
+            console.error("Fehler bei der Anfrage zum erneuten Spielen:", error);
         }
     });
 
@@ -591,7 +542,19 @@ function endGame(room, winner) {
             players: sortedPlayers
         });
 
-        // Den Raum für ein neues Spiel vorbereiten aber nicht löschen
+        // Alle Spieler aus dem Raum entfernen
+        const roomSockets = io.sockets.adapter.rooms.get(room);
+        if (roomSockets) {
+            for (const socketId of roomSockets) {
+                const clientSocket = io.sockets.sockets.get(socketId);
+                if (clientSocket) {
+                    clientSocket.leave(room);
+                    clientSocket.data.room = null;
+                }
+            }
+        }
+
+        // Räume aufräumen aber den Raum noch nicht löschen
         r.wolfVotes = {};
         r.dayVotes = {};
         r.readyForNextGame = [];
