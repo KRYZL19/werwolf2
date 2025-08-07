@@ -200,10 +200,16 @@
             padding: 10px;
             margin-bottom: 5px;
             border-radius: 5px;
-            transition: background-color 0.2s;
+            transition: background-color 0.2s, transform 0.1s;
+            border: 1px solid #dee2e6;
         }
         .room-list-item:hover {
             background-color: #f0f0f0;
+            transform: translateY(-2px);
+            border-color: #adb5bd;
+        }
+        .room-list-item:active {
+            transform: translateY(0);
         }
 
         .result-badge {
@@ -325,6 +331,17 @@
         @media (max-width: 600px) {
             body { padding: 10px; max-width: 100%; }
         }
+
+        .countdown-timer {
+            position: absolute;
+            bottom: 10px;
+            right: 10px;
+            background-color: rgba(0, 0, 0, 0.6);
+            color: white;
+            padding: 5px 10px;
+            border-radius: 20px;
+            font-weight: bold;
+        }
     </style>
 </head>
 <body>
@@ -353,6 +370,7 @@
 
     <div class="mt-4">
         <h5>Verfügbare Räume:</h5>
+        <p class="small text-muted">Gib deinen Namen ein und klicke auf einen Raum, um beizutreten.</p>
         <div id="availableRooms" class="mt-2">
             <div class="text-center py-2">
                 <div class="spinner-border spinner-border-sm" role="status">
@@ -431,9 +449,20 @@
 <div id="winAnimation"></div>
 
 <div id="versionInfo">
-    v1.9.0 <span class="toggle-details" onclick="toggleVersionDetails()">Details anzeigen</span>
+    v1.10.0 <span class="toggle-details" onclick="toggleVersionDetails()">Details anzeigen</span>
     <div id="versionDetails">
-        <p><strong>v1.9.0</strong> (aktuelle Version):</p>
+        <p><strong>v1.10.0</strong> (aktuelle Version):</p>
+        <ul>
+            <li>Direkter Raumbeitritt durch Klick auf den Raumnamen</li>
+            <li>Automatisches Schließen der Endkarte nach 15 Sekunden</li>
+            <li>Countdown-Timer in der Ergebniskarte</li>
+        </ul>
+        <p><strong>v1.9.1</strong>:</p>
+        <ul>
+            <li>Bugfix: RIP-Karte wird bei Spielende zuverlässig ausgeblendet, auch für den zuletzt getöteten Spieler</li>
+            <li>Verbesserte Prüfung des Spielzustands, damit die Siegesanimation Priorität hat</li>
+        </ul>
+        <p><strong>v1.9.0</strong>:</p>
         <ul>
             <li>Bugfix: Der letzte getötete Spieler sieht jetzt die Siegesanimation und Endkarte</li>
             <li>Bugfix: Siegesanimation erscheint jetzt sofort bei Spielende</li>
@@ -498,11 +527,12 @@
         let roomsHtml = '';
         rooms.forEach(r => {
             roomsHtml += `
-                <div class="room-list-item border" onclick="selectRoom('${r.id}')">
+                <div class="room-list-item" onclick="selectRoom('${r.id}')">
                     <div class="d-flex justify-content-between">
                         <span><b>${r.id}</b></span>
                         <span>👥 (${r.players}/${r.maxPlayers}) 🐺 [${r.wolves}]</span>
                     </div>
+                    <div class="small text-muted mt-1">Klicken zum Beitreten</div>
                 </div>
             `;
         });
@@ -511,7 +541,21 @@
     });
 
     function selectRoom(roomId) {
-        document.getElementById("room").value = roomId;
+        const nameInput = document.getElementById("name").value.trim();
+        if (!nameInput) {
+            alert("Bitte gib zuerst deinen Namen ein!");
+            document.getElementById("name").focus();
+            return;
+        }
+
+        name = nameInput;
+        room = roomId;
+
+        // Direkt beitreten ohne auf den Button zu klicken
+        socket.emit("joinRoom", { name, room });
+        document.getElementById("menu").style.display = "none";
+        document.getElementById("game").style.display = "block";
+        document.getElementById("gameStatus").textContent = "Lobby";
     }
 
     function createRoom() {
@@ -523,17 +567,6 @@
 
         if (!name || !room) return alert("Name und Raum-ID eingeben!");
         socket.emit("createRoom", { name, room, wolves, maxPlayers });
-        document.getElementById("menu").style.display = "none";
-        document.getElementById("game").style.display = "block";
-        document.getElementById("gameStatus").textContent = "Lobby";
-    }
-
-    function joinRoom() {
-        name = document.getElementById("name").value;
-        room = document.getElementById("room").value;
-
-        if (!name || !room) return alert("Name und Raum-ID eingeben!");
-        socket.emit("joinRoom", { name, room });
         document.getElementById("menu").style.display = "none";
         document.getElementById("game").style.display = "block";
         document.getElementById("gameStatus").textContent = "Lobby";
@@ -936,7 +969,7 @@
             gameDiv.style.display = "block";
 
             gameDiv.innerHTML = `
-                <div class="result-card card">
+                <div class="result-card card position-relative">
                     <div class="card-header bg-${result.winner === "Werwölfe" ? "danger" : "primary"} text-white">
                         <h2 class="text-center m-0">${result.winner} haben gewonnen!</h2>
                     </div>
@@ -971,8 +1004,25 @@
                             </button>
                         </div>
                     </div>
+                    <div class="countdown-timer" id="endCountdown">15</div>
                 </div>
             `;
+
+            // Timer für automatische Rückkehr zum Hauptmenü
+            let secondsLeft = 15;
+            const countdownEl = document.getElementById("endCountdown");
+
+            const countdownTimer = setInterval(() => {
+                secondsLeft--;
+                if (countdownEl) {
+                    countdownEl.textContent = secondsLeft;
+                }
+
+                if (secondsLeft <= 0) {
+                    clearInterval(countdownTimer);
+                    location.reload(); // Zurück zum Hauptmenü
+                }
+            }, 1000);
         }, 3500);
     });
 
