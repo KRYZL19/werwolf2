@@ -1176,6 +1176,55 @@
         }
     });
 
+    socket.on("dayResult", (data) => {
+        if (!amIDead) {
+            document.getElementById("nightPhase").style.display = "none";
+            document.getElementById("dayPhase").style.display = "none";
+            document.getElementById("deathAnnouncement").style.display = "block";
+            document.getElementById("gameStatus").textContent = "Abstimmungsergebnis";
+
+            const deathText = document.getElementById("deathText");
+            const victimList = document.getElementById("victimList");
+            victimList.innerHTML = "";
+
+            if (data.victims && data.victims.length > 0) {
+                deathText.textContent = data.victims.length === 1
+                    ? `Gehängt wurde ... ${data.names}`
+                    : `Gehängt wurden ... ${data.names}`;
+
+                data.victims.forEach(v => {
+                    const el = document.createElement("div");
+                    el.className = "fw-bold animate-text";
+                    el.textContent = v.name;
+                    setTimeout(() => {
+                        el.classList.add("visible");
+                    }, 300);
+                    victimList.appendChild(el);
+                });
+            } else {
+                deathText.textContent = "Heute ist niemand gestorben...";
+                const el = document.createElement("div");
+                el.className = "fw-bold animate-text";
+                el.textContent = "Niemand";
+                setTimeout(() => {
+                    el.classList.add("visible");
+                }, 300);
+                victimList.appendChild(el);
+            }
+
+            let playerIsDead = false;
+            if (data.victims && Array.isArray(data.victims)) {
+                playerIsDead = data.victims.some(v => v.id === socket.id);
+            }
+
+            setTimeout(() => {
+                if (playerIsDead) {
+                    showRipScreen();
+                }
+            }, 3000);
+        }
+    });
+
     socket.on("playerEliminated", (playerId) => {
         if (playerId === socket.id && !gameEnded) { // Nur RIP-Screen anzeigen, wenn das Spiel nicht beendet ist
             showRipScreen();
