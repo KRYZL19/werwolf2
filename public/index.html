@@ -354,17 +354,26 @@
     <input id="name" class="form-control mb-2" placeholder="Dein Name" />
     <input id="room" class="form-control mb-2" placeholder="Raum ID" />
 
-    <button class="btn btn-primary mt-2" onclick="joinRoom()">Raum beitreten</button>
     <hr />
     <label class="form-label mt-2">Anzahl Werwölfe:</label>
     <select id="wolves" class="form-select">
-        <option>1</option><option>2</option><option>3</option>
+        <option value="1">1</option>
+        <option value="2">2</option>
+        <option value="3">3</option>
     </select>
     <label class="form-label mt-2">Max Spielerzahl:</label>
-    <select id="maxPlayers" class="form-select">
-        <option>5</option><option>6</option><option>7</option><option>8</option>
-        <option>9</option><option>10</option><option>11</option><option>12</option>
-        <option>13</option><option>14</option><option>15</option>
+    <select id="maxPlayers" class="form-select" onchange="updateWolfOptions()">
+        <option value="5">5</option>
+        <option value="6">6</option>
+        <option value="7">7</option>
+        <option value="8">8</option>
+        <option value="9">9</option>
+        <option value="10">10</option>
+        <option value="11">11</option>
+        <option value="12">12</option>
+        <option value="13">13</option>
+        <option value="14">14</option>
+        <option value="15">15</option>
     </select>
     <button class="btn btn-success mt-2" onclick="createRoom()">Raum erstellen</button>
 
@@ -449,9 +458,14 @@
 <div id="winAnimation"></div>
 
 <div id="versionInfo">
-    v1.10.1 <span class="toggle-details" onclick="toggleVersionDetails()">Details anzeigen</span>
+    v1.10.2 <span class="toggle-details" onclick="toggleVersionDetails()">Details anzeigen</span>
     <div id="versionDetails">
-        <p><strong>v1.10.1</strong> (aktuelle Version):</p>
+        <p><strong>v1.10.2</strong> (aktuelle Version):</p>
+        <ul>
+            <li>Entfernung des überflüssigen "Raum beitreten"-Buttons</li>
+            <li>Intelligente Werwolf-Auswahl: 2 Werwölfe erst ab 7 Spielern, 3 Werwölfe ab 10 Spielern</li>
+        </ul>
+        <p><strong>v1.10.1</strong>:</p>
         <ul>
             <li>Bugfix: Korrekte Anzahl an Werwölfen gemäß Raumeinstellungen</li>
         </ul>
@@ -508,7 +522,7 @@
     let maxPlayersInRoom = 0;
     let readyForNextGame = false;
     let amIDead = false;
-    let gameEnded = false; // Neue Variable zum Tracken, ob das Spiel beendet ist
+    let gameEnded = false;
 
     let deadChatMessages = [];
 
