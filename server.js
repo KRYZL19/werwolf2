@@ -313,13 +313,18 @@ function startGame(room) {
         const shuffled = [...r.players].sort(() => Math.random() - 0.5);
 
         // Rollen zuweisen
-        const wolfCount = Math.min(r.wolves, Math.floor(r.players.length / 3));
-        for (let i = 0; i < wolfCount; i++) {
-            shuffled[i].role = "Werwolf";
-            shuffled[i].alive = true;
-        }
-        for (let i = wolfCount; i < shuffled.length; i++) {
-            shuffled[i].role = "Dorfbewohner";
+        // Benutze die eingestellte Werwolfanzahl, begrenzt auf maximal die Hälfte der Spieler
+        const wolfCount = Math.min(r.wolves, Math.floor(r.players.length / 2));
+        console.log(`Starte Spiel mit ${wolfCount} Werwölfen von ${r.wolves} eingestellten.`);
+
+        for (let i = 0; i < shuffled.length; i++) {
+            // Zuerst die angegebene Anzahl Werwölfe zuweisen
+            if (i < wolfCount) {
+                shuffled[i].role = "Werwolf";
+            } else {
+                // Dann den Rest mit Dorfbewohnern auffüllen
+                shuffled[i].role = "Dorfbewohner";
+            }
             shuffled[i].alive = true;
         }
 
