@@ -400,6 +400,30 @@
             font-weight: bold;
             display: none;
         }
+
+        .lobby-row {
+            display: flex;
+            gap: 8px;
+            margin-bottom: 10px;
+        }
+        .lobby-row .form-label {
+            margin-bottom: 0;
+            font-size: 0.95em;
+        }
+        .lobby-row .form-group {
+            display: flex;
+            flex-direction: column;
+            align-items: flex-start;
+            min-width: 0;
+            flex: 1 1 0;
+        }
+
+        .toast-container {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            z-index: 3000;
+        }
     </style>
 </head>
 <body>
@@ -411,46 +435,53 @@
 <div id="menu" class="card p-3 shadow-sm">
     <input id="name" class="form-control mb-2" placeholder="Dein Name" />
     <input id="room" class="form-control mb-2" placeholder="Raum ID" />
+    <button class="btn btn-success mb-3" onclick="createRoom()">Raum erstellen</button>
 
-    <hr />
-    <label class="form-label mt-2">Anzahl Werwölfe:</label>
-    <select id="wolves" class="form-select">
-        <option value="1">1</option>
-        <option value="2">2</option>
-        <option value="3">3</option>
-    </select>
-    <label class="form-label mt-2">Max Spielerzahl:</label>
-    <select id="maxPlayers" class="form-select" onchange="updateWolfOptions()">
-        <option value="5">5</option>
-        <option value="6">6</option>
-        <option value="7">7</option>
-        <option value="8">8</option>
-        <option value="9">9</option>
-        <option value="10">10</option>
-        <option value="11">11</option>
-        <option value="12">12</option>
-        <option value="13">13</option>
-        <option value="14">14</option>
-        <option value="15">15</option>
-    </select>
-    <label class="form-label mt-2">Hexe:</label>
-    <select id="witch" class="form-select">
-        <option value="0">0</option>
-        <option value="1">1</option>
-    </select>
-    <label class="form-label mt-2">Amor:</label>
-    <select id="amor" class="form-select">
-        <option value="0">0</option>
-        <option value="1">1</option>
-    </select>
-    <label class="form-label mt-2">Seher:</label>
-    <select id="seer" class="form-select">
-        <option value="0">0</option>
-        <option value="1">1</option>
-    </select>
-    <button class="btn btn-success mt-2" onclick="createRoom()">Raum erstellen</button>
+    <div class="lobby-row mb-2">
+        <div class="form-group">
+            <label class="form-label">Anzahl Spieler</label>
+            <select id="maxPlayers" class="form-select" onchange="updateWolfOptions()">
+                <option value="5">5</option>
+                <option value="6">6</option>
+                <option value="7">7</option>
+                <option value="8">8</option>
+                <option value="9">9</option>
+                <option value="10">10</option>
+                <option value="11">11</option>
+                <option value="12">12</option>
+                <option value="13">13</option>
+                <option value="14">14</option>
+                <option value="15">15</option>
+            </select>
+        </div>
+        <div class="form-group">
+            <label class="form-label">Werwölfe</label>
+            <select id="wolves" class="form-select"></select>
+        </div>
+        <div class="form-group">
+            <label class="form-label">Hexe</label>
+            <select id="witch" class="form-select">
+                <option value="0">0</option>
+                <option value="1">1</option>
+            </select>
+        </div>
+        <div class="form-group">
+            <label class="form-label">Seher</label>
+            <select id="seer" class="form-select">
+                <option value="0">0</option>
+                <option value="1">1</option>
+            </select>
+        </div>
+        <div class="form-group">
+            <label class="form-label" style="color:pink;">Amor</label>
+            <select id="amor" class="form-select">
+                <option value="0">0</option>
+                <option value="1">1</option>
+            </select>
+        </div>
+    </div>
 
-    <div class="mt-4">
+    <div class="mt-2">
         <h5>Verfügbare Räume:</h5>
         <p class="small text-muted">Gib deinen Namen ein und klicke auf einen Raum, um beizutreten.</p>
         <div id="availableRooms" class="mt-2">
@@ -602,6 +633,8 @@
         </ul>
     </div>
 </div>
+
+<div class="toast-container" id="toastContainer"></div>
 
 <div id="loverInfo" class="lover-box">❤️ Verliebt in: <span id="loverName"></span></div>
 
@@ -951,11 +984,6 @@
         };
     });
 
-    socket.on("loverAssigned", (data) => {
-        document.getElementById("loverName").textContent = data.name;
-        document.getElementById("loverInfo").style.display = "block";
-    });
-
     socket.on("seerChoose", (players) => {
         if (myRole !== "Seher" || amIDead) return;
         document.getElementById("villagerNight").style.display = "none";
@@ -978,7 +1006,7 @@
 
     socket.on("seerResult", ({ name, isWolf }) => {
         if (myRole !== "Seher" || amIDead) return;
-        alert(`${name} ist ${isWolf ? '' : 'kein '}Werwolf`);
+        showToast(`${name} ist ${isWolf ? "" : "kein "}Werwolf`, isWolf ? "#dc3545" : "#40E0D0");
     });
 
     socket.on("witchChoose", ({ victim, healUsed, poisonUsed, players }) => {
@@ -1463,6 +1491,56 @@
             toggle.textContent = 'Details ausblenden';
         }
     }
+
+    // Toast-Funktion für Seher-Resultate
+    function showToast(message, color = "#40E0D0") {
+        const toastContainer = document.getElementById("toastContainer");
+        const toast = document.createElement("div");
+        toast.className = "toast align-items-center show";
+        toast.style.background = color;
+        toast.style.color = "#222";
+        toast.style.minWidth = "180px";
+        toast.style.fontWeight = "bold";
+        toast.innerHTML = `
+            <div class="d-flex">
+                <div class="toast-body">${message}</div>
+                <button type="button" class="btn-close me-2 m-auto" data-bs-dismiss="toast"></button>
+            </div>
+        `;
+        toastContainer.appendChild(toast);
+        setTimeout(() => {
+            toast.classList.remove("show");
+            setTimeout(() => toast.remove(), 400);
+        }, 3500);
+    }
+
+    // Liebesinfo ausblenden, wenn einer der Liebenden tot ist
+    socket.on("loverAssigned", (data) => {
+        document.getElementById("loverName").textContent = data.name;
+        document.getElementById("loverInfo").style.display = "block";
+        window.currentLoverId = data.loverId; // Merke die ID des Lovers
+    });
+
+    // Spieler-Status-Updates abfangen, um das Lover-Banner auszublenden
+    socket.on("updatePlayerList", (players) => {
+        const playerList = document.getElementById("playerList");
+        playerList.textContent = players.map(p => p.name).join(", ");
+
+        alivePlayers = players;
+
+        updateWaitingMessage(players.length);
+        const progress = (players.length / maxPlayersInRoom) * 100;
+        document.getElementById("playerProgress").style.width = `${progress}%`;
+
+        // Lover-Banner ausblenden, wenn Lover tot ist
+        if (window.currentLoverId) {
+            const me = players.find(p => p.id === socket.id);
+            const lover = players.find(p => p.id === window.currentLoverId);
+            if (!me || !lover || !me.alive || !lover.alive) {
+                document.getElementById("loverInfo").style.display = "none";
+            }
+        }
+    });
 </script>
 </body>
 </html>

@@ -176,8 +176,8 @@ io.on("connection", (socket) => {
             p1.lover = p2.id;
             p2.lover = p1.id;
 
-            io.to(p1.id).emit("loverAssigned", { name: p2.name });
-            io.to(p2.id).emit("loverAssigned", { name: p1.name });
+            io.to(p1.id).emit("loverAssigned", { name: p2.name, loverId: p2.id });
+            io.to(p2.id).emit("loverAssigned", { name: p1.name, loverId: p1.id });
 
             r.nightStage = null;
             nextNightStage(room);
