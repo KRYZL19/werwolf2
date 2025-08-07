@@ -978,6 +978,70 @@
             }
         }
 
+        // Alle relevanten UI-Elemente ausblenden, einschließlich des RIP-Bildschirms
+        document.querySelectorAll("#menu, #game, #roleDisplay, #nightPhase, #dayPhase, #deathAnnouncement, #ripScreen").forEach(el => {
+            el.style.display = "none";
+        });
+
+        // Sieganimation anzeigen (Blut oder Konfetti)
+        playWinAnimation(result.winner);
+
+        // Nach Animation Spielergebnisse anzeigen
+        setTimeout(() => {
+            const gameDiv = document.getElementById("game");
+            gameDiv.style.display = "block"; // Das Spiel-Div wird für die Endkarte wieder eingeblendet
+
+            gameDiv.innerHTML = `
+            <div class="result-card card">
+                <div class="card-header bg-${result.winner === "Werwölfe" ? "danger" : "primary"} text-white">
+                    <h2 class="text-center m-0">${result.winner} haben gewonnen!</h2>
+                </div>
+                <div class="card-body p-3">
+                    <h4 class="mb-3">Spieler:</h4>
+                    <ul class="list-group">
+                        ${result.players.map(p => {
+                const hasWon = (p.role === "Werwolf" && result.winner === "Werwölfe") ||
+                    (p.role === "Dorfbewohner" && result.winner === "Dorfbewohner");
+                const roleClass = p.role === "Werwolf" ? "player-role-wolf" : "player-role-villager";
+                return `
+                                <li class="list-group-item d-flex justify-content-between align-items-center">
+                                    <div>
+                                        ${p.name}
+                                        <span class="result-badge ${hasWon ? 'win-badge' : 'loss-badge'}">${hasWon ? 'W' : 'L'}</span>
+                                    </div>
+                                    <div>
+                                        <span class="badge ${roleClass}">${p.role}</span>
+                                        ${p.alive ? '' : '<span class="badge player-status-dead ms-1">☠️ Tot</span>'}
+                                    </div>
+                                </li>`;
+            }).join('')}
+                    </ul>
+                    <div class="text-center mt-3 small text-muted">
+                        <p>W = Gewonnen | L = Verloren</p>
+                    </div>
+                </div>
+                <div class="card-footer bg-light">
+                    <div class="d-flex justify-content-between">
+                        <button id="readyButton" class="btn ready-button flex-grow-1 me-2" onclick="playAgain()">
+                            <i class="bi bi-check-circle"></i> Bereit für nächste Runde
+                        </button>
+                        <button class="btn btn-secondary flex-grow-1" onclick="location.reload()">
+                            Neues Spiel starten
+                        </button>
+                    </div>
+                </div>
+            </div>
+        `;
+
+            // Disabled-Status für tote Spieler bei "Bereit" setzen
+            if (amIDead) {
+                document.getElementById("readyButton").disabled = true;
+                document.getElementById("readyButton").title = "Tote Spieler können nicht mehr teilnehmen";
+                document.getElementById("readyButton").textContent = "Du bist tot";
+            }
+        }, 3500);
+    });
+
         // Alle UI-Elemente ausblenden – auch für tote Spieler!
         document.querySelectorAll("#nightPhase, #dayPhase, #deathAnnouncement, #ripScreen").forEach(el => {
             el.style.display = "none";
