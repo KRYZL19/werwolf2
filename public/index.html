@@ -247,8 +247,32 @@
             background-color: #40E0D0;
             color: #000;
         }
+        .seer-vote-btn {
+            background-color: #40E0D0;
+            border-color: #40E0D0;
+            color: #000;
+        }
+        .seer-vote-btn:hover {
+            background-color: #3ac9c9;
+            border-color: #3ac9c9;
+            color: #000;
+        }
         .player-role-witch {
             background-color: purple;
+            color: #fff;
+        }
+        .witch-poison-btn {
+            background-color: #6a0dad;
+            border-color: #6a0dad;
+            color: #fff;
+        }
+        .witch-poison-btn:hover {
+            background-color: #7b1fb0;
+            border-color: #7b1fb0;
+            color: #fff;
+        }
+        .witch-poison-btn.current-player {
+            filter: brightness(0.7);
         }
         .player-status-dead {
             background-color: #6c757d;
@@ -779,7 +803,7 @@
         function showStep() {
             roleText.textContent = steps[i];
             roleText.classList.add("visible");
-            setRoleColor(role);
+            roleText.style.color = "#000";
             if (i < steps.length - 1) {
                 setTimeout(() => {
                     roleText.classList.remove("visible");
@@ -791,6 +815,7 @@
             } else {
                 setTimeout(() => {
                     roleText.textContent = role;
+                    roleText.style.color = "";
                     setRoleColor(role);
                     roleText.className = "fw-bold";
 
@@ -940,8 +965,8 @@
         container.innerHTML = "";
         players.forEach(player => {
             const btn = document.createElement("button");
-            btn.className = "btn btn-outline-light vote-btn";
-            btn.textContent = player.name;
+            btn.className = "btn seer-vote-btn vote-btn";
+            btn.innerHTML = "👁️ " + player.name;
             btn.onclick = function() {
                 socket.emit("seerSelection", { room, target: player.id });
                 div.style.display = "none";
@@ -987,14 +1012,19 @@
         if (!poisonUsed) {
             players.forEach(player => {
                 const btn = document.createElement("button");
-                btn.className = "btn btn-danger poison-btn";
+                btn.className = "btn witch-poison-btn vote-btn";
                 btn.textContent = player.name;
-                btn.onclick = function() {
-                    document.querySelectorAll("#witchActions .btn").forEach(b => b.classList.remove("selected"));
-                    poison = player.id;
-                    heal = false;
-                    btn.classList.add("selected");
-                };
+                if (player.id === socket.id) {
+                    btn.disabled = true;
+                    btn.classList.add("current-player");
+                } else {
+                    btn.onclick = function() {
+                        document.querySelectorAll("#witchActions .btn").forEach(b => b.classList.remove("selected"));
+                        poison = player.id;
+                        heal = false;
+                        btn.classList.add("selected");
+                    };
+                }
                 actions.appendChild(btn);
             });
         }
