@@ -36,7 +36,7 @@ io.on("connection", (socket) => {
         }
     });
 
-    socket.on("createRoom", ({ name, room, wolves, maxPlayers }) => {
+    socket.on("createRoom", ({ name, room, wolves, maxPlayers, witch = 0, amor = 0, seer = 0 }) => {
         try {
             if (rooms[room]) {
                 socket.emit("errorMessage", "Raum existiert bereits.");
@@ -48,6 +48,9 @@ io.on("connection", (socket) => {
                 players: [{ id: socket.id, name, role: null, alive: true, lover: null }],
                 wolves,
                 maxPlayers,
+                witch,
+                amor,
+                seer,
                 started: false,
                 phase: "lobby",
                 wolfVotes: {},
@@ -395,9 +398,10 @@ function startGame(room) {
         }
 
         const villagers = shuffled.filter(p => p.role === "Dorfbewohner");
-        if (villagers[0]) villagers[0].role = "Amor";
-        if (villagers[1]) villagers[1].role = "Seher";
-        if (villagers[2]) villagers[2].role = "Hexe";
+        let vIndex = 0;
+        if (r.amor > 0 && villagers[vIndex]) villagers[vIndex++].role = "Amor";
+        if (r.seer > 0 && villagers[vIndex]) villagers[vIndex++].role = "Seher";
+        if (r.witch > 0 && villagers[vIndex]) villagers[vIndex++].role = "Hexe";
 
         for (const player of shuffled) {
             io.to(player.id).emit("showRole", player.role);
@@ -474,6 +478,7 @@ function nextNightStage(room) {
 
 function startWitchStage(room) {
     const r = rooms[room];
+    io.to(room).emit("closeWolfVote");
     const witch = r.players.find(p => p.role === "Hexe" && p.alive);
     if (witch) {
         r.nightStage = "witch";
@@ -726,7 +731,7 @@ function endGame(room, winner) {
         const sortedPlayers = r.players.map(p => ({
             id: p.id,
             name: p.name,
-            role: displayRole(p.role),
+            role: p.role,
             alive: p.alive,
             isWinner: (p.role === "Werwolf" && winner === "Werwölfe") ||
                 (p.role !== "Werwolf" && winner === "Dorfbewohner")

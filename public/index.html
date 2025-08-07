@@ -239,8 +239,29 @@
         .player-role-villager {
             background-color: #0d6efd;
         }
+        .player-role-amor {
+            background-color: pink;
+            color: #000;
+        }
+        .player-role-seer {
+            background-color: #40E0D0;
+            color: #000;
+        }
+        .player-role-witch {
+            background-color: purple;
+        }
         .player-status-dead {
             background-color: #6c757d;
+        }
+
+        .amor-btn {
+            background-color: pink;
+            border-color: pink;
+            color: #000;
+        }
+        .amor-btn.selected {
+            background-color: hotpink;
+            border-color: hotpink;
         }
 
         .ready-button {
@@ -387,6 +408,21 @@
         <option value="13">13</option>
         <option value="14">14</option>
         <option value="15">15</option>
+    </select>
+    <label class="form-label mt-2">Hexe:</label>
+    <select id="witch" class="form-select">
+        <option value="0">0</option>
+        <option value="1">1</option>
+    </select>
+    <label class="form-label mt-2">Amor:</label>
+    <select id="amor" class="form-select">
+        <option value="0">0</option>
+        <option value="1">1</option>
+    </select>
+    <label class="form-label mt-2">Seher:</label>
+    <select id="seer" class="form-select">
+        <option value="0">0</option>
+        <option value="1">1</option>
     </select>
     <button class="btn btn-success mt-2" onclick="createRoom()">Raum erstellen</button>
 
@@ -676,6 +712,9 @@
         room = document.getElementById("room").value;
         const wolves = parseInt(document.getElementById("wolves").value);
         const maxPlayers = parseInt(document.getElementById("maxPlayers").value);
+        const witch = parseInt(document.getElementById("witch").value);
+        const amor = parseInt(document.getElementById("amor").value);
+        const seer = parseInt(document.getElementById("seer").value);
         maxPlayersInRoom = maxPlayers;
 
         if (!name || !room) return alert("Name und Raum-ID eingeben!");
@@ -683,7 +722,7 @@
         // Namen speichern
         saveName();
 
-        socket.emit("createRoom", { name, room, wolves, maxPlayers });
+        socket.emit("createRoom", { name, room, wolves, maxPlayers, witch, amor, seer });
         document.getElementById("menu").style.display = "none";
         document.getElementById("game").style.display = "block";
         document.getElementById("gameStatus").textContent = "Lobby";
@@ -852,6 +891,10 @@
         }
     });
 
+    socket.on("closeWolfVote", () => {
+        document.getElementById("wolfVote").style.display = "none";
+    });
+
     socket.on("amorChoose", (players) => {
         if (myRole !== "Amor" || amIDead) return;
         document.getElementById("villagerNight").style.display = "none";
@@ -862,7 +905,7 @@
         let selected = [];
         players.forEach(player => {
             const btn = document.createElement("button");
-            btn.className = "btn btn-outline-light vote-btn";
+            btn.className = "btn amor-btn vote-btn";
             btn.textContent = player.name;
             btn.onclick = function() {
                 if (selected.includes(player.id)) {
@@ -929,8 +972,15 @@
             healBtn.className = "btn btn-success";
             healBtn.textContent = "Heilen";
             healBtn.onclick = function() {
-                heal = !heal;
-                healBtn.classList.toggle("selected");
+                if (heal) {
+                    heal = false;
+                    healBtn.classList.remove("selected");
+                } else {
+                    heal = true;
+                    poison = null;
+                    document.querySelectorAll("#witchActions .btn").forEach(b => b.classList.remove("selected"));
+                    healBtn.classList.add("selected");
+                }
             };
             actions.appendChild(healBtn);
         }
@@ -940,13 +990,24 @@
                 btn.className = "btn btn-danger poison-btn";
                 btn.textContent = player.name;
                 btn.onclick = function() {
-                    document.querySelectorAll(".poison-btn").forEach(b => b.classList.remove("selected"));
+                    document.querySelectorAll("#witchActions .btn").forEach(b => b.classList.remove("selected"));
                     poison = player.id;
+                    heal = false;
                     btn.classList.add("selected");
                 };
                 actions.appendChild(btn);
             });
         }
+        const skipBtn = document.createElement("button");
+        skipBtn.className = "btn btn-secondary";
+        skipBtn.textContent = "Nichts tun";
+        skipBtn.onclick = function() {
+            heal = false;
+            poison = null;
+            document.querySelectorAll("#witchActions .btn").forEach(b => b.classList.remove("selected"));
+            skipBtn.classList.add("selected");
+        };
+        actions.appendChild(skipBtn);
         document.getElementById("witchConfirm").onclick = function() {
             socket.emit("witchDecision", { room, heal, poison });
             div.style.display = "none";
@@ -1208,8 +1269,15 @@
                         <ul class="list-group">
                             ${result.players.map(p => {
                                 const hasWon = (p.role === "Werwolf" && result.winner === "Werwölfe") ||
-                                    (p.role === "Dorfbewohner" && result.winner === "Dorfbewohner");
-                                const roleClass = p.role === "Werwolf" ? "player-role-wolf" : "player-role-villager";
+                                    (p.role !== "Werwolf" && result.winner === "Dorfbewohner");
+                                let roleClass;
+                                switch(p.role) {
+                                    case "Werwolf": roleClass = "player-role-wolf"; break;
+                                    case "Amor": roleClass = "player-role-amor"; break;
+                                    case "Seher": roleClass = "player-role-seer"; break;
+                                    case "Hexe": roleClass = "player-role-witch"; break;
+                                    default: roleClass = "player-role-villager"; break;
+                                }
                                 return `
                                     <li class="list-group-item d-flex justify-content-between align-items-center">
                                         <div>
