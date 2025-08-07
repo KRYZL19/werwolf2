@@ -268,27 +268,28 @@ io.on("connection", (socket) => {
                 r.readyForNextGame.push(socket.id);
             }
 
-            console.log(`Spieler ${name} ist bereit für die nächste Runde (${r.readyForNextGame.length}/${r.players.filter(p => p.alive).length})`);
+            console.log(`Spieler ${name} ist bereit für die nächste Runde (${r.readyForNextGame.length}/${r.players.length})`);
 
-            // Update anderen Spielern, wer bereit ist
+            // Update allen Spielern senden, wer bereit ist
             io.to(room).emit("updatePlayerList", r.players.filter(p =>
-                r.readyForNextGame.includes(p.id) && p.alive
+                r.readyForNextGame.includes(p.id)
             ).map(p => ({
                 id: p.id,
                 name: p.name,
                 alive: true
             })));
 
-            // Wenn alle lebenden Spieler bereit sind und genug für ein Spiel, neues Spiel starten
-            const alivePlayers = r.players.filter(p => p.alive);
-            const readyAlivePlayers = alivePlayers.filter(p => r.readyForNextGame.includes(p.id));
-            const minPlayers = Math.max(4, r.wolves + 2); // Mindestens 4 Spieler oder Werwölfe + 2
+            // Wenn genug Spieler bereit sind, neues Spiel starten
+            // Mindestens 4 Spieler oder Werwölfe + 2
+            const minPlayers = Math.max(4, r.wolves + 2);
 
-            if (readyAlivePlayers.length === alivePlayers.length && alivePlayers.length >= minPlayers) {
-                console.log(`Starte neue Runde mit ${alivePlayers.length} Spielern`);
+            if (r.readyForNextGame.length >= minPlayers &&
+                r.readyForNextGame.length >= Math.floor(r.players.length * 0.75)) { // mindestens 75% der Spieler
 
-                // Spielerliste aktualisieren - nur lebende Spieler behalten
-                r.players = r.players.filter(p => p.alive);
+                console.log(`Starte neue Runde mit ${r.readyForNextGame.length} Spielern`);
+
+                // Nur Spieler behalten, die bereit sind
+                r.players = r.players.filter(p => r.readyForNextGame.includes(p.id));
 
                 // Rollen zurücksetzen
                 r.players.forEach(p => {
