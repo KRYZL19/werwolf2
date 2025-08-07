@@ -762,29 +762,23 @@
         roomsContainer.innerHTML = roomsHtml;
     });
 
-    function selectRoom(roomId) {
-        const nameInput = document.getElementById("name").value.trim();
-        if (!nameInput) {
-            alert("Bitte gib zuerst deinen Namen ein!");
-            document.getElementById("name").focus();
-            return;
+    // Zufällige Zeichen zum Namen hinzufügen
+    function generateRandomChars() {
+        const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
+        let result = '';
+        for (let i = 0; i < 2; i++) {
+            result += chars.charAt(Math.floor(Math.random() * chars.length));
         }
-
-        name = nameInput;
-        room = roomId;
-
-        // Namen speichern
-        saveName();
-
-        // Direkt beitreten ohne auf den Button zu klicken
-        socket.emit("joinRoom", { name, room });
-        document.getElementById("menu").style.display = "none";
-        document.getElementById("game").style.display = "block";
-        document.getElementById("gameStatus").textContent = "Lobby";
+        return result;
     }
 
     function createRoom() {
         name = document.getElementById("name").value;
+        if (name.trim() !== "") {
+            // Zwei zufällige Zeichen hinzufügen
+            name = name + " " + generateRandomChars();
+        }
+
         room = document.getElementById("room").value;
         const wolves = parseInt(document.getElementById("wolves").value);
         const maxPlayers = parseInt(document.getElementById("maxPlayers").value);
@@ -795,10 +789,32 @@
 
         if (!name || !room) return alert("Name und Raum-ID eingeben!");
 
-        // Namen speichern
+        // Namen speichern (ohne die zufälligen Zeichen)
         saveName();
 
         socket.emit("createRoom", { name, room, wolves, maxPlayers, witch, amor, seer });
+        document.getElementById("menu").style.display = "none";
+        document.getElementById("game").style.display = "block";
+        document.getElementById("gameStatus").textContent = "Lobby";
+    }
+
+    function selectRoom(roomId) {
+        const nameInput = document.getElementById("name").value.trim();
+        if (!nameInput) {
+            alert("Bitte gib zuerst deinen Namen ein!");
+            document.getElementById("name").focus();
+            return;
+        }
+
+        // Zwei zufällige Zeichen hinzufügen
+        name = nameInput + " " + generateRandomChars();
+        room = roomId;
+
+        // Namen speichern (ohne die zufälligen Zeichen)
+        saveName();
+
+        // Direkt beitreten ohne auf den Button zu klicken
+        socket.emit("joinRoom", { name, room });
         document.getElementById("menu").style.display = "none";
         document.getElementById("game").style.display = "block";
         document.getElementById("gameStatus").textContent = "Lobby";
@@ -1059,9 +1075,13 @@
             actions.appendChild(healBtn);
         }
 
-        // Gifttrank (andere Spieler, aber nicht sich selbst)
+        // Gifttrank (andere Spieler, aber nicht sich selbst und nicht das Werwolf-Opfer)
         if (!poisonUsed) {
-            players.filter(player => player.id !== socket.id).forEach(player => {
+            // Filter: Nicht die Hexe selbst und nicht das aktuelle Werwolf-Opfer
+            players.filter(player =>
+                player.id !== socket.id &&
+                (!victim || player.id !== victim.id)
+            ).forEach(player => {
                 const btn = document.createElement("button");
                 btn.className = "btn witch-poison-btn poison-btn vote-btn";
                 btn.innerHTML = `<span class="poison-icon">☠️</span>${player.name}`;
@@ -1075,15 +1095,20 @@
             });
         }
 
-        // Skip-Button
+        // Skip-Button mit schwarzer Hervorhebung
         const skipBtn = document.createElement("button");
         skipBtn.className = "btn btn-secondary";
+        skipBtn.id = "witchSkipBtn";
         skipBtn.textContent = "Nichts tun";
         skipBtn.onclick = function() {
             heal = false;
             poison = null;
             document.querySelectorAll("#witchActions .btn").forEach(b => b.classList.remove("selected"));
             skipBtn.classList.add("selected");
+            // Zusätzliche Hervorhebung
+            skipBtn.style.backgroundColor = "#222";
+            skipBtn.style.color = "#fff";
+            skipBtn.style.borderColor = "#000";
         };
         actions.appendChild(skipBtn);
 
@@ -1096,50 +1121,65 @@
 
     // Mehrere Opfer in der Nacht anzeigen
     socket.on("announceVictim", (victims) => {
-        if (amIDead) return;
+        // Nur anzeigen, wenn der Spieler lebt
+        if (!amIDead) {
+            document.getElementById("nightPhase").style.display = "none";
+            document.getElementById("deathAnnouncement").style.display = "block";
+            document.getElementById("gameStatus").textContent = "Morgengrauen";
 
-        document.getElementById("nightPhase").style.display = "none";
-        document.getElementById("deathAnnouncement").style.display = "block";
-        document.getElementById("gameStatus").textContent = "Morgengrauen";
+            const deathText = document.getElementById("deathText");
+            const victimList = document.getElementById("victimList");
 
-        const deathText = document.getElementById("deathText");
-        const victimList = document.getElementById("victimList");
+            deathText.textContent = "Gestorben sind...";
+            victimList.innerHTML = "";
 
-        deathText.textContent = "Gestorben sind...";
-        victimList.innerHTML = "";
-
-        if (Array.isArray(victims) && victims.length > 0) {
-            victims.forEach(v => {
+            if (Array.isArray(victims) && victims.length > 0) {
+                victims.forEach(v => {
+                    const el = document.createElement("div");
+                    el.className = "fw-bold animate-text";
+                    el.textContent = v.name;
+                    // Animation für das Element hinzufügen
+                    setTimeout(() => {
+                        el.classList.add("visible");
+                    }, 300);
+                    victimList.appendChild(el);
+                });
+            } else if (victims && victims.name) {
+                // Fallback für Einzelopfer
                 const el = document.createElement("div");
                 el.className = "fw-bold animate-text";
-                el.textContent = v.name;
+                el.textContent = victims.name;
+                setTimeout(() => {
+                    el.classList.add("visible");
+                }, 300);
                 victimList.appendChild(el);
-            });
-        } else if (victims && victims.name) {
-            // Fallback für Einzelopfer
-            const el = document.createElement("div");
-            el.className = "fw-bold animate-text";
-            el.textContent = victims.name;
-            victimList.appendChild(el);
-        } else {
-            victimList.innerHTML = "<div class='fw-bold animate-text'>Niemand</div>";
-        }
-
-        setTimeout(() => {
-            if (Array.isArray(victims)) {
-                if (victims.some(v => v.id === socket.id)) {
-                    showRipScreen();
-                } else {
-                    socket.emit("readyForDay", { room });
-                }
             } else {
-                if (victims.id === socket.id) {
+                const el = document.createElement("div");
+                el.className = "fw-bold animate-text";
+                el.textContent = "Niemand";
+                setTimeout(() => {
+                    el.classList.add("visible");
+                }, 300);
+                victimList.appendChild(el);
+            }
+
+            // Prüfen, ob der Spieler selbst unter den Opfern ist
+            let playerIsDead = false;
+            if (Array.isArray(victims)) {
+                playerIsDead = victims.some(v => v.id === socket.id);
+            } else if (victims && victims.id) {
+                playerIsDead = victims.id === socket.id;
+            }
+
+            // Nach 3 Sekunden fortfahren
+            setTimeout(() => {
+                if (playerIsDead) {
                     showRipScreen();
                 } else {
                     socket.emit("readyForDay", { room });
                 }
-            }
-        }, 3000);
+            }, 3000);
+        }
     });
 
     socket.on("playerEliminated", (playerId) => {

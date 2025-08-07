@@ -483,8 +483,13 @@ function startWitchStage(room) {
     if (witch) {
         r.nightStage = "witch";
         const victimPlayer = r.players.find(p => p.id === r.nightVictim);
-        // Hexe selbst nicht als Ziel für Gifttrank
-        const options = r.players.filter(p => p.alive && p.id !== witch.id).map(p => ({ id: p.id, name: p.name }));
+        // Hexe selbst nicht als Ziel für Gifttrank und auch nicht das aktuelle Werwolf-Opfer
+        const options = r.players.filter(p =>
+            p.alive &&
+            p.id !== witch.id &&
+            (p.id !== r.nightVictim || !r.nightVictim)
+        ).map(p => ({ id: p.id, name: p.name }));
+
         io.to(witch.id).emit("witchChoose", {
             victim: victimPlayer ? { id: victimPlayer.id, name: victimPlayer.name } : null,
             healUsed: r.witchHealUsed,
