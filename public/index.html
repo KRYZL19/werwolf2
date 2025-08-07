@@ -342,6 +342,19 @@
             border-radius: 20px;
             font-weight: bold;
         }
+
+        .lover-box {
+            position: fixed;
+            bottom: 10px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: pink;
+            color: #000;
+            padding: 5px 10px;
+            border-radius: 5px;
+            font-weight: bold;
+            display: none;
+        }
     </style>
 </head>
 <body>
@@ -411,6 +424,21 @@
         <h4 class="text-danger mb-3">Wähle dein Opfer:</h4>
         <div id="wolfVoteButtons" class="d-grid gap-2"></div>
         <p class="mt-3 fst-italic">Ihr müsst euch auf ein Opfer einigen.</p>
+    </div>
+    <div id="amorChoice" style="display: none;">
+        <h4 class="text-danger mb-3">Wähle zwei Liebende:</h4>
+        <div id="amorButtons" class="d-grid gap-2"></div>
+        <button id="amorConfirm" class="btn btn-primary mt-2" disabled>Bestätigen</button>
+    </div>
+    <div id="seerChoice" style="display: none;">
+        <h4 class="mb-3">Wen möchtest du sehen?</h4>
+        <div id="seerButtons" class="d-grid gap-2"></div>
+    </div>
+    <div id="witchChoice" style="display: none;">
+        <h4 class="mb-3">Hexe, entscheide dich</h4>
+        <p id="witchInfo"></p>
+        <div id="witchActions" class="d-grid gap-2 mb-2"></div>
+        <button id="witchConfirm" class="btn btn-primary">Bestätigen</button>
     </div>
     <div id="villagerNight">
         <p class="mb-4">Schließe deine Augen und warte...</p>
@@ -514,6 +542,8 @@
         </ul>
     </div>
 </div>
+
+<div id="loverInfo" class="lover-box">❤️ Verliebt in: <span id="loverName"></span></div>
 
 <script src="/socket.io/socket.io.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
@@ -704,7 +734,7 @@
         let steps = [
             "Du...",
             "Du... bist...",
-            `Du... bist... ${role === "Werwolf" ? "Werwolf" : "Dorfbewohner"}`
+            `Du... bist... ${role}`
         ];
         let i = 0;
         function showStep() {
@@ -728,6 +758,12 @@
                     const desc = document.getElementById("roleDescription");
                     if (role === "Werwolf") {
                         desc.textContent = "Deine Aufgabe: Wähle nachts mit den anderen Werwölfen ein Opfer. Verberge tagsüber deine Identität.";
+                    } else if (role === "Amor") {
+                        desc.textContent = "In der ersten Nacht verkuppelst du zwei Spieler.";
+                    } else if (role === "Seher") {
+                        desc.textContent = "Jede Nacht darfst du einen Spieler überprüfen.";
+                    } else if (role === "Hexe") {
+                        desc.textContent = "Du besitzt einen Heil- und einen Gifttrank.";
                     } else {
                         desc.textContent = "Deine Aufgabe: Finde heraus, wer die Werwölfe sind und stimme bei Tag gegen sie ab.";
                     }
@@ -758,42 +794,47 @@
         document.body.classList.add("night-phase");
         document.body.classList.remove("day-phase");
 
-        if (myRole === "Werwolf") {
-            document.getElementById("wolfVote").style.display = "block";
-            document.getElementById("villagerNight").style.display = "none";
+        document.getElementById("wolfVote").style.display = "none";
+        document.getElementById("amorChoice").style.display = "none";
+        document.getElementById("seerChoice").style.display = "none";
+        document.getElementById("witchChoice").style.display = "none";
+        document.getElementById("villagerNight").style.display = "block";
+    });
 
-            const wolfVoteButtons = document.getElementById("wolfVoteButtons");
-            wolfVoteButtons.innerHTML = "";
+    socket.on("startWolfVote", () => {
+        if (myRole !== "Werwolf" || amIDead) return;
 
-            const livingVictims = alivePlayers.filter(player =>
-                player.id !== socket.id &&
-                player.role !== "Werwolf" &&
-                player.alive);
+        document.getElementById("wolfVote").style.display = "block";
+        document.getElementById("villagerNight").style.display = "none";
 
-            if (livingVictims.length === 0) {
-                wolfVoteButtons.innerHTML = `
-                    <div class="alert alert-warning">
-                        Keine Dorfbewohner mehr übrig!
-                    </div>`;
-            } else {
-                livingVictims.forEach(player => {
-                    const btn = document.createElement("button");
-                    btn.className = "btn btn-outline-light vote-btn wolf-target-btn";
-                    btn.textContent = player.name;
-                    btn.dataset.player = player.id;
-                    btn.onclick = function() {
-                        document.querySelectorAll(".vote-btn").forEach(b =>
-                            b.classList.remove("selected"));
-                        this.classList.add("selected");
-                        wolfTarget = player.id;
-                        socket.emit("wolfVote", { room, target: player.id });
-                    };
-                    wolfVoteButtons.appendChild(btn);
-                });
-            }
+        const wolfVoteButtons = document.getElementById("wolfVoteButtons");
+        wolfVoteButtons.innerHTML = "";
+
+        const livingVictims = alivePlayers.filter(player =>
+            player.id !== socket.id &&
+            player.role !== "Werwolf" &&
+            player.alive);
+
+        if (livingVictims.length === 0) {
+            wolfVoteButtons.innerHTML = `
+                <div class="alert alert-warning">
+                    Keine Dorfbewohner mehr übrig!
+                </div>`;
         } else {
-            document.getElementById("wolfVote").style.display = "none";
-            document.getElementById("villagerNight").style.display = "block";
+            livingVictims.forEach(player => {
+                const btn = document.createElement("button");
+                btn.className = "btn btn-outline-light vote-btn wolf-target-btn";
+                btn.textContent = player.name;
+                btn.dataset.player = player.id;
+                btn.onclick = function() {
+                    document.querySelectorAll(".vote-btn").forEach(b =>
+                        b.classList.remove("selected"));
+                    this.classList.add("selected");
+                    wolfTarget = player.id;
+                    socket.emit("wolfVote", { room, target: player.id });
+                };
+                wolfVoteButtons.appendChild(btn);
+            });
         }
     });
 
@@ -809,6 +850,108 @@
                 if (targetBtn) targetBtn.classList.add("targeted");
             }
         }
+    });
+
+    socket.on("amorChoose", (players) => {
+        if (myRole !== "Amor" || amIDead) return;
+        document.getElementById("villagerNight").style.display = "none";
+        const div = document.getElementById("amorChoice");
+        div.style.display = "block";
+        const container = document.getElementById("amorButtons");
+        container.innerHTML = "";
+        let selected = [];
+        players.forEach(player => {
+            const btn = document.createElement("button");
+            btn.className = "btn btn-outline-light vote-btn";
+            btn.textContent = player.name;
+            btn.onclick = function() {
+                if (selected.includes(player.id)) {
+                    selected = selected.filter(id => id !== player.id);
+                    btn.classList.remove("selected");
+                } else if (selected.length < 2) {
+                    selected.push(player.id);
+                    btn.classList.add("selected");
+                }
+                document.getElementById("amorConfirm").disabled = selected.length !== 2;
+            };
+            container.appendChild(btn);
+        });
+        document.getElementById("amorConfirm").onclick = function() {
+            socket.emit("amorSelected", { room, first: selected[0], second: selected[1] });
+            div.style.display = "none";
+            document.getElementById("villagerNight").style.display = "block";
+        };
+    });
+
+    socket.on("loverAssigned", (data) => {
+        document.getElementById("loverName").textContent = data.name;
+        document.getElementById("loverInfo").style.display = "block";
+    });
+
+    socket.on("seerChoose", (players) => {
+        if (myRole !== "Seher" || amIDead) return;
+        document.getElementById("villagerNight").style.display = "none";
+        const div = document.getElementById("seerChoice");
+        div.style.display = "block";
+        const container = document.getElementById("seerButtons");
+        container.innerHTML = "";
+        players.forEach(player => {
+            const btn = document.createElement("button");
+            btn.className = "btn btn-outline-light vote-btn";
+            btn.textContent = player.name;
+            btn.onclick = function() {
+                socket.emit("seerSelection", { room, target: player.id });
+                div.style.display = "none";
+                document.getElementById("villagerNight").style.display = "block";
+            };
+            container.appendChild(btn);
+        });
+    });
+
+    socket.on("seerResult", ({ name, isWolf }) => {
+        if (myRole !== "Seher" || amIDead) return;
+        alert(`${name} ist ${isWolf ? '' : 'kein '}Werwolf`);
+    });
+
+    socket.on("witchChoose", ({ victim, healUsed, poisonUsed, players }) => {
+        if (myRole !== "Hexe" || amIDead) return;
+        document.getElementById("villagerNight").style.display = "none";
+        const div = document.getElementById("witchChoice");
+        div.style.display = "block";
+        const info = document.getElementById("witchInfo");
+        info.textContent = victim ? `${victim.name} wurde angegriffen.` : `Niemand wurde angegriffen.`;
+        const actions = document.getElementById("witchActions");
+        actions.innerHTML = "";
+        let heal = false;
+        let poison = null;
+        if (!healUsed && victim) {
+            const healBtn = document.createElement("button");
+            healBtn.className = "btn btn-success";
+            healBtn.textContent = "Heilen";
+            healBtn.onclick = function() {
+                heal = !heal;
+                healBtn.classList.toggle("selected");
+            };
+            actions.appendChild(healBtn);
+        }
+        if (!poisonUsed) {
+            players.forEach(player => {
+                const btn = document.createElement("button");
+                btn.className = "btn btn-danger poison-btn";
+                btn.textContent = player.name;
+                btn.onclick = function() {
+                    document.querySelectorAll(".poison-btn").forEach(b => b.classList.remove("selected"));
+                    poison = player.id;
+                    btn.classList.add("selected");
+                };
+                actions.appendChild(btn);
+            });
+        }
+        document.getElementById("witchConfirm").onclick = function() {
+            socket.emit("witchDecision", { room, heal, poison });
+            div.style.display = "none";
+            document.getElementById("villagerNight").style.display = "block";
+        };
     });
 
     socket.on("announceVictim", (victim) => {
