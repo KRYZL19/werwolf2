@@ -1043,40 +1043,173 @@
         }, 3500);
     });
 
-    function playAgain() {
-        // Wenn tot, nicht teilnehmen können
-        if (amIDead) return;
+    function playWinAnimation(winner) {
+        console.log("Starte Siegesanimation für:", winner);
+        const animationContainer = document.getElementById("winAnimation");
+        animationContainer.innerHTML = "";
+        animationContainer.style.display = "block";
 
-        readyForNextGame = true;
-        socket.emit("playAgain", { room, name });
+        if (winner === "Werwölfe") {
+            // Werwölfe haben gewonnen: Blutanimation
+            animationContainer.className = "blood-animation";
 
-        // Button-Zustand ändern
-        const readyButton = document.getElementById("readyButton");
-        readyButton.classList.add("active");
-        readyButton.innerHTML = '<i class="bi bi-check-circle-fill"></i> Bereit!';
-        readyButton.disabled = true;
+            // Titel einfügen
+            const title = document.createElement("div");
+            title.style.position = "fixed";
+            title.style.top = "40%";
+            title.style.left = "0";
+            title.style.right = "0";
+            title.style.textAlign = "center";
+            title.style.color = "#fff";
+            title.style.fontSize = "2rem";
+            title.style.fontWeight = "bold";
+            title.style.zIndex = "2001";
+            title.style.textShadow = "0 0 10px #ff0000";
+            title.innerHTML = "DIE WERWÖLFE HABEN GEWONNEN!";
+            animationContainer.appendChild(title);
 
-        // Wartebereich anzeigen
-        const gameDiv = document.getElementById("game");
-        gameDiv.innerHTML = `
-            <div class="alert alert-success">
-                <h4 class="mb-3">Warte auf weitere Spieler in Raum: ${room}</h4>
-                <h5 id="waitingMessage">Bereit für nächste Runde...</h5>
-                <p id="playerList"></p>
-                <div class="progress mt-2">
-                    <div id="playerProgress" class="progress-bar bg-success" role="progressbar" style="width: 0%"></div>
-                </div>
-                <button class="btn btn-outline-danger mt-3" onclick="location.reload()">Spiel verlassen</button>
-            </div>
+            // Blutflecken erstellen
+            for (let i = 0; i < 15; i++) {
+                const splash = document.createElement("div");
+                splash.className = "blood-splash";
+
+                // Zufällige Position
+                splash.style.left = `${Math.random() * 80 + 10}%`;
+                splash.style.top = `${Math.random() * 80 + 10}%`;
+
+                // Zufällige Größe
+                const size = Math.random() * 150 + 50;
+                splash.style.width = `${size}px`;
+                splash.style.height = `${size}px`;
+
+                // Zufällige Rotation
+                splash.style.transform = `rotate(${Math.random() * 360}deg)`;
+
+                // Animation mit CSS
+                splash.style.animation = `bloodSplash 2s ease-out ${Math.random() * 1.5}s forwards`;
+
+                animationContainer.appendChild(splash);
+            }
+
+            // Wolfsheulen abspielen (optional)
+            try {
+                const audio = new Audio('data:audio/mp3;base64,SUQzAwAAAAAAIlRJVDIAAAAZAAAAaHR0cDovL3d3dy5mcmVlc2Z4LmNvLnVrAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA//uQZAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAWGluZwAAAA8AAAAFAAAGhgBVVVVVVVVVVVVVVVVVVVVVVVVVd3d3d3d3d3d3d3d3d3d3d3d3d6qqqqqqqqqqqqqqqqqqqqqqqqqq/////////////////////wAAADRMQU1FMy45OHIEdQAAAAAAAAAAFEAkBGAiQABCAAAGhgI8n1SQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA//sQZAAP8AAAaQAAAAgAAA0gAAABAAABpAAAACAAADSAAAAETEFNRTMuOTguMlVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVQ==');
+                audio.volume = 0.3;
+                audio.play().catch(e => console.log("Audio konnte nicht abgespielt werden"));
+            } catch (e) {
+                console.log("Audio nicht unterstützt");
+            }
+        } else {
+            // Dorfbewohner haben gewonnen: Konfetti-Animation
+            const confettiContainer = document.createElement("div");
+            confettiContainer.className = "confetti-container";
+            animationContainer.appendChild(confettiContainer);
+
+            // Titel einfügen
+            const title = document.createElement("div");
+            title.style.position = "fixed";
+            title.style.top = "40%";
+            title.style.left = "0";
+            title.style.right = "0";
+            title.style.textAlign = "center";
+            title.style.color = "#fff";
+            title.style.fontSize = "2rem";
+            title.style.fontWeight = "bold";
+            title.style.zIndex = "2001";
+            title.style.textShadow = "0 0 10px #0095ff";
+            title.innerHTML = "DIE DORFBEWOHNER HABEN GEWONNEN!";
+            animationContainer.appendChild(title);
+
+            // Konfetti erstellen
+            for (let i = 0; i < 150; i++) {
+                createConfetti(confettiContainer);
+            }
+
+            // Jubel abspielen (optional)
+            try {
+                const audio = new Audio('data:audio/mp3;base64,SUQzAwAAAAAAIlRJVDIAAAAZAAAAaHR0cDovL3d3dy5mcmVlc2Z4LmNvLnVrAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA//uQZAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAWGluZwAAAA8AAAAFAAAGhgBVVVVVVVVVVVVVVVVVVVVVVVVVd3d3d3d3d3d3d3d3d3d3d3d3d6qqqqqqqqqqqqqqqqqqqqqqqqqq/////////////////////wAAADRMQU1FMy45OHIEdQAAAAAAAAAAFEAkBGAiQABCAAAGhgRpPHSQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA//sQZAAP8AAAaQAAAAgAAA0gAAABAAABpAAAACAAADSAAAAETEFNRTMuOTguMlVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVQ==');
+                audio.volume = 0.3;
+                audio.play().catch(e => console.log("Audio konnte nicht abgespielt werden"));
+            } catch (e) {
+                console.log("Audio nicht unterstützt");
+            }
+        }
+
+        // Animation nach 3.5 Sekunden beenden
+        setTimeout(() => {
+            animationContainer.style.display = "none";
+            animationContainer.innerHTML = "";
+            animationContainer.className = "";
+        }, 3500);
+    }
+
+    function createConfetti(container) {
+        const confetti = document.createElement("div");
+        confetti.className = "confetti";
+
+        // Zufällige Farbe
+        const colors = ["#f94144", "#f3722c", "#f8961e", "#f9c74f", "#90be6d", "#43aa8b", "#577590", "#277da1"];
+        confetti.style.backgroundColor = colors[Math.floor(Math.random() * colors.length)];
+
+        // Zufällige Form
+        if (Math.random() > 0.5) {
+            confetti.style.borderRadius = "50%";
+        }
+
+        // Zufällige Position
+        const startPositionX = Math.random() * 100;
+        confetti.style.left = `${startPositionX}%`;
+        confetti.style.top = "-20px";
+
+        // Animationen definieren
+        const keyframes = `
+            @keyframes fallDown {
+                from { transform: translateY(-20px) rotate(0deg); opacity: 1; }
+                to { transform: translateY(${window.innerHeight}px) rotate(720deg); opacity: 0; }
+            }
+            @keyframes sideMovement {
+                0% { margin-left: -20px; }
+                50% { margin-left: 20px; }
+                100% { margin-left: -20px; }
+            }
         `;
-        document.getElementById("gameStatus").textContent = "Warte in Lobby";
+
+        // Style Element erstellen falls noch nicht vorhanden
+        if (!document.getElementById('confettiAnimation')) {
+            const styleEl = document.createElement('style');
+            styleEl.id = 'confettiAnimation';
+            styleEl.textContent = keyframes;
+            document.head.appendChild(styleEl);
+        }
+
+        // Animation anwenden
+        const fallDuration = Math.random() * 3 + 2; // 2-5 Sekunden
+        const swayDuration = Math.random() * 2 + 1; // 1-3 Sekunden
+        const fallDelay = Math.random() * 1.5;     // 0-1.5 Sekunden Verzögerung
+
+        confetti.style.animationName = "fallDown, sideMovement";
+        confetti.style.animationDuration = `${fallDuration}s, ${swayDuration}s`;
+        confetti.style.animationTimingFunction = "ease-in, ease-in-out";
+        confetti.style.animationDelay = `${fallDelay}s, ${fallDelay}s`;
+        confetti.style.animationIterationCount = "1, infinite";
+        confetti.style.animationFillMode = "forwards";
+        confetti.style.opacity = "0";
+
+        // Dem Container hinzufügen
+        container.appendChild(confetti);
     }
 
     // Versions-Info aktualisieren
     document.getElementById('versionInfo').innerHTML = `
-        v1.5.0 <span class="toggle-details" onclick="toggleVersionDetails()">Details anzeigen</span>
+        v1.6.0 <span class="toggle-details" onclick="toggleVersionDetails()">Details anzeigen</span>
         <div id="versionDetails">
-            <p><strong>v1.5.0</strong> (aktuelle Version):</p>
+            <p><strong>v1.6.0</strong> (aktuelle Version):</p>
+            <ul>
+                <li>Siegesanimationen und Endkarte für alle Spieler sichtbar</li>
+                <li>Konfetti-Animation für Dorfbewohner-Sieg</li>
+                <li>Blut-Animation für Werwolf-Sieg</li>
+            </ul>
+            <p><strong>v1.5.0</strong>:</p>
             <ul>
                 <li>Bugfixes für Spielende</li>
                 <li>Tote Spieler sehen jetzt die Endkarte</li>
@@ -1084,14 +1217,8 @@
             </ul>
             <p><strong>v1.4.0</strong>:</p>
             <ul>
-                <li>Tote Spieler sehen jetzt die Endkarte</li>
                 <li>Geisterflüstern doppelte Nachrichten behoben</li>
                 <li>"Erneut spielen" bleibt im gleichen Raum</li>
-            </ul>
-            <p><strong>v1.3.0</strong>:</p>
-            <ul>
-                <li>Siegesüberprüfung verbessert</li>
-                <li>Siegesanimationen zuverlässiger gemacht</li>
             </ul>
         </div>
     `;

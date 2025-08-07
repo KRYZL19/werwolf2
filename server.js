@@ -507,30 +507,30 @@ function checkGameStatus(room) {
 
         console.log(`Prüfe Spielstatus: ${wolves.length} Werwölfe vs ${villagers.length} Dorfbewohner`);
 
-        // Prüfen, ob genug Spieler übrig sind
-        if (wolves.length + villagers.length < 3) {
-            console.log("Zu wenige Spieler übrig, beende Spiel");
-            if (wolves.length > 0) {
-                endGame(room, "Werwölfe"); // Wenn noch Werwölfe da sind, gewinnen sie
-                return true;
-            } else {
-                endGame(room, "Dorfbewohner"); // Ansonsten gewinnen die Dorfbewohner
-                return true;
-            }
-        }
+        // Debug-Ausgaben für Siegbedingungen
+        console.log(`Siegbedingung Werwölfe: ${wolves.length} >= ${villagers.length} = ${wolves.length >= villagers.length}`);
+        console.log(`Siegbedingung Dorfbewohner: ${wolves.length === 0}`);
 
         // Werwölfe haben gewonnen, wenn sie gleich viele oder mehr sind als Dorfbewohner
         if (wolves.length >= villagers.length) {
             console.log("Werwölfe haben gewonnen! (gleiche/mehr Anzahl als Dorfbewohner)");
-            endGame(room, "Werwölfe");
-            return true;
+            return endGame(room, "Werwölfe");
         }
 
         // Dorfbewohner haben gewonnen, wenn alle Werwölfe tot sind
         if (wolves.length === 0) {
             console.log("Dorfbewohner haben gewonnen! (alle Werwölfe tot)");
-            endGame(room, "Dorfbewohner");
-            return true;
+            return endGame(room, "Dorfbewohner");
+        }
+
+        // Prüfen, ob genug Spieler übrig sind
+        if (wolves.length + villagers.length < 3) {
+            console.log("Zu wenige Spieler übrig, beende Spiel");
+            if (wolves.length > 0) {
+                return endGame(room, "Werwölfe"); // Wenn noch Werwölfe da sind, gewinnen sie
+            } else {
+                return endGame(room, "Dorfbewohner"); // Ansonsten gewinnen die Dorfbewohner
+            }
         }
 
         return false;
@@ -576,7 +576,7 @@ function endGame(room, winner) {
             return 0;
         });
 
-        // Sicherstellen, dass alle Spieler das Ereignis empfangen
+        // Direkt an jeden Spieler individuell senden, um sicherzustellen, dass alle die Nachricht erhalten
         for (const player of r.players) {
             io.to(player.id).emit("gameOver", {
                 winner,
@@ -584,11 +584,16 @@ function endGame(room, winner) {
             });
         }
 
+        // Zusätzlich auch an den ganzen Raum senden
+        io.to(room).emit("gameOver", {
+            winner,
+            players: sortedPlayers
+        });
+
         // Den Raum für ein neues Spiel vorbereiten aber nicht löschen
         r.wolfVotes = {};
         r.dayVotes = {};
         r.readyForNextGame = [];
-        r.phase = "gameOver";
 
         return true;
     } catch (error) {
