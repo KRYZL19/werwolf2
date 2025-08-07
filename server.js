@@ -185,11 +185,12 @@ io.on("connection", (socket) => {
                             name: victim.name
                         });
 
-                        // Benachrichtigung an das Opfer senden
-                        io.to(victim.id).emit("playerEliminated", victim.id);
-
-                        // Spielstatus prüfen
-                        checkGameStatus(room);
+                        // Spielstatus prüfen – nur RIP senden, wenn das Spiel weitergeht
+                        const gameContinues = !checkGameStatus(room);
+                        if (gameContinues) {
+                            // Benachrichtigung an das Opfer senden
+                            io.to(victim.id).emit("playerEliminated", victim.id);
+                        }
                     }
                 }
             }
@@ -418,6 +419,11 @@ function endDayPhase(room) {
                     votes: maxVotes
                 });
 
+                // Spielstatus prüfen – RIP nur senden, wenn das Spiel weitergeht
+                if (checkGameStatus(room)) {
+                    return; // Spiel ist vorbei
+                }
+
                 // Benachrichtigung an das Opfer senden
                 io.to(victim.id).emit("playerEliminated", victim.id);
 
@@ -428,11 +434,6 @@ function endDayPhase(room) {
                     alive: p.alive,
                     role: p.role
                 })));
-
-                // Spielstatus prüfen
-                if (checkGameStatus(room)) {
-                    return; // Spiel ist vorbei
-                }
 
                 // Nach 5 Sekunden die nächste Nachtphase starten
                 setTimeout(() => startNightPhase(room), 5000);
