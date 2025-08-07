@@ -475,6 +475,7 @@
     let maxPlayersInRoom = 0;
     let readyForNextGame = false;
     let amIDead = false;
+    let gameEnded = false; // Neue Variable zum Tracken, ob das Spiel beendet ist
 
     let deadChatMessages = [];
 
@@ -720,12 +721,15 @@
     });
 
     socket.on("playerEliminated", (playerId) => {
-        if (playerId === socket.id) {
+        if (playerId === socket.id && !gameEnded) { // Nur RIP-Screen anzeigen, wenn das Spiel nicht beendet ist
             showRipScreen();
         }
     });
 
     function showRipScreen() {
+        // Wenn das Spiel bereits beendet ist, keine RIP-Karte anzeigen
+        if (gameEnded) return;
+
         document.querySelectorAll("#game, #roleDisplay, #nightPhase, #dayPhase, #deathAnnouncement").forEach(el => {
             el.style.display = "none";
         });
@@ -904,6 +908,9 @@
 
     socket.on("gameOver", (result) => {
         console.log("SPIEL BEENDET: " + result.winner + " gewinnen!");
+
+        // Spiel als beendet markieren
+        gameEnded = true;
 
         // Alle Timeouts und Intervalle stoppen
         for (let id in window) {
