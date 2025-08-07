@@ -920,10 +920,10 @@
                         <h4 class="mb-3">Spieler:</h4>
                         <ul class="list-group">
                             ${result.players.map(p => {
-                                const hasWon = (p.role === "Werwolf" && result.winner === "Werwölfe") ||
-                                    (p.role === "Dorfbewohner" && result.winner === "Dorfbewohner");
-                                const roleClass = p.role === "Werwolf" ? "player-role-wolf" : "player-role-villager";
-                                return `
+                const hasWon = (p.role === "Werwolf" && result.winner === "Werwölfe") ||
+                    (p.role === "Dorfbewohner" && result.winner === "Dorfbewohner");
+                const roleClass = p.role === "Werwolf" ? "player-role-wolf" : "player-role-villager";
+                return `
                                     <li class="list-group-item d-flex justify-content-between align-items-center">
                                         <div>
                                             ${p.name}
@@ -934,7 +934,7 @@
                                             ${p.alive ? '' : '<span class="badge player-status-dead ms-1">☠️ Tot</span>'}
                                         </div>
                                     </li>`;
-                            }).join('')}
+            }).join('')}
                         </ul>
                         <div class="text-center mt-3 small text-muted">
                             <p>W = Gewonnen | L = Verloren</p>

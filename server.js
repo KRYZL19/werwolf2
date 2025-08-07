@@ -565,7 +565,7 @@ function endGame(room, winner) {
             role: p.role,
             alive: p.alive,
             isWinner: (p.role === "Werwolf" && winner === "Werwölfe") ||
-                    (p.role === "Dorfbewohner" && winner === "Dorfbewohner")
+                (p.role === "Dorfbewohner" && winner === "Dorfbewohner")
         })).sort((a, b) => {
             // Gewinner zuerst
             if (a.isWinner && !b.isWinner) return -1;
