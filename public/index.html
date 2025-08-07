@@ -4,7 +4,6 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Werwolf Webspiel</title>
-    <!-- Bootstrap CSS -->
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
     <style>
         body {
@@ -17,7 +16,6 @@
             transition: background 0.5s, color 0.5s;
         }
 
-        /* Tag/Nacht Phasen */
         .day-phase {
             background-color: #f8f9fa;
             color: #333;
@@ -43,14 +41,12 @@
             font-size: 24px;
         }
 
-        /* Spielelemente */
         #menu, #game, #roleDisplay, #nightPhase, #dayPhase, #deathAnnouncement, #winAnimation, #ripScreen {
             display: none;
             margin-top: 20px;
         }
         #menu { display: block; }
 
-        /* Rollen-Farben */
         .role-wolf {
             color: #b30000;
         }
@@ -62,7 +58,6 @@
             color: #fff;
         }
 
-        /* Animationen */
         .animate-text {
             opacity: 0;
             transition: opacity 0.3s;
@@ -71,7 +66,6 @@
             opacity: 1;
         }
 
-        /* Voting-Elemente */
         .vote-btn {
             display: block;
             width: 100%;
@@ -88,7 +82,6 @@
             color: black;
         }
 
-        /* Wolf-Opfer-Buttons im Nachtmodus */
         .wolf-target-btn {
             color: #ff5555 !important;
             border-color: #ff5555;
@@ -101,21 +94,17 @@
             color: white !important;
         }
 
-        /* Gewinn-Animationen */
         #winAnimation {
             position: fixed;
             top: 0;
             left: 0;
             width: 100%;
             height: 100%;
-            z-index: 1000;
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            pointer-events: none;
+            z-index: 2000;
+            display: none;
+            overflow: hidden;
         }
 
-        /* Blut-Animation für Werwolf-Sieg */
         .blood-animation {
             background-color: rgba(180, 0, 0, 0.1);
             animation: bloodPulse 3s ease-in-out forwards;
@@ -141,7 +130,6 @@
             100% { opacity: 0.6; transform: scale(0.9); }
         }
 
-        /* Konfetti für Dorfbewohner-Sieg */
         .confetti-container {
             width: 100%;
             height: 100%;
@@ -158,7 +146,6 @@
             opacity: 0;
         }
 
-        /* RIP Screen */
         #ripScreen {
             background-color: #222;
             color: white;
@@ -170,7 +157,6 @@
             margin-bottom: 1rem;
         }
 
-        /* Chat für tote Spieler */
         #deadChat {
             background-color: rgba(0, 0, 0, 0.8);
             border-radius: 5px;
@@ -203,14 +189,12 @@
             border: 1px solid #444;
         }
 
-        /* Skip-Button für Abstimmung */
         .skip-vote-btn {
             background-color: #6c757d;
             color: white;
             margin-top: 10px;
         }
 
-        /* Verfügbare Räume */
         .room-list-item {
             cursor: pointer;
             padding: 10px;
@@ -222,7 +206,6 @@
             background-color: #f0f0f0;
         }
 
-        /* Win/Loss Badge für Spielergebnis */
         .result-badge {
             display: inline-block;
             width: 24px;
@@ -244,7 +227,6 @@
             background-color: rgba(220, 53, 69, 0.1);
         }
 
-        /* Verbesserte Spieler-Labels */
         .player-role-wolf {
             background-color: #dc3545;
         }
@@ -255,7 +237,6 @@
             background-color: #6c757d;
         }
 
-        /* Ready-Button Styling */
         .ready-button {
             background-color: #28a745;
             color: white;
@@ -269,7 +250,6 @@
             box-shadow: 0 0 0 0.25rem rgba(40, 167, 69, 0.5);
         }
 
-        /* Verbesserter Ergebnis-Screen */
         .result-card {
             border: none;
             box-shadow: 0 4px 8px rgba(0,0,0,0.1);
@@ -285,12 +265,6 @@
             background-color: #f8f9fa;
         }
 
-        /* Verbesserte Animations-Darstellung */
-        #winAnimation {
-            z-index: 2000; /* Höherer z-index für bessere Sichtbarkeit */
-        }
-
-        /* Version Info */
         #versionInfo {
             position: fixed;
             bottom: 10px;
@@ -318,12 +292,6 @@
             overflow-y: auto;
         }
 
-        /* Verbesserte Siege-Animationen */
-        #winAnimation {
-            z-index: 2000;
-        }
-
-        /* Konfetti-Animation verbessern */
         @keyframes fallDown {
             0% { transform: translateY(0) rotate(0deg); opacity: 1; }
             100% { transform: translateY(100vh) rotate(360deg); opacity: 0; }
@@ -332,6 +300,26 @@
         @keyframes sideMovement {
             0% { margin-left: -20px; }
             100% { margin-left: 20px; }
+        }
+
+        .win-title {
+            position: fixed;
+            top: 40%;
+            left: 0;
+            right: 0;
+            text-align: center;
+            color: white;
+            font-size: 2rem;
+            font-weight: bold;
+            z-index: 2001;
+            text-shadow: 0 0 10px rgba(0, 0, 0, 0.7);
+            opacity: 0;
+            animation: fadeIn 1s ease-in-out 0.5s forwards;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; transform: scale(0.9); }
+            to { opacity: 1; transform: scale(1); }
         }
 
         @media (max-width: 600px) {
@@ -392,13 +380,11 @@
 
 <div id="nightPhase" class="card p-3 shadow-sm mt-3 text-center">
     <h3 class="mb-4">Das Dorf schläft ein...</h3>
-    <!-- Für Werwölfe -->
     <div id="wolfVote" style="display: none;">
         <h4 class="text-danger mb-3">Wähle dein Opfer:</h4>
         <div id="wolfVoteButtons" class="d-grid gap-2"></div>
         <p class="mt-3 fst-italic">Ihr müsst euch auf ein Opfer einigen.</p>
     </div>
-    <!-- Für Dorfbewohner -->
     <div id="villagerNight">
         <p class="mb-4">Schließe deine Augen und warte...</p>
         <div class="d-flex justify-content-center">
@@ -431,7 +417,6 @@
     <p class="mt-3">Du kannst das Spiel weiterhin verfolgen, aber nicht mehr teilnehmen.</p>
     <p class="text-danger mt-3">Tote können nicht mehr zurückkehren...</p>
 
-    <!-- Chat für tote Spieler -->
     <div class="mt-4">
         <h4>Geisterflüstern</h4>
         <p class="text-muted small">Nur andere tote Spieler können dich hören...</p>
@@ -446,24 +431,27 @@
 <div id="winAnimation"></div>
 
 <div id="versionInfo">
-    v1.2.0 <span class="toggle-details" onclick="toggleVersionDetails()">Details anzeigen</span>
+    v1.8.0 <span class="toggle-details" onclick="toggleVersionDetails()">Details anzeigen</span>
     <div id="versionDetails">
-        <p><strong>v1.2.0</strong> (aktuelle Version):</p>
+        <p><strong>v1.8.0</strong> (aktuelle Version):</p>
         <ul>
-            <li>Siegesbildschirme für Werwölfe/Dorfbewohner korrigiert</li>
-            <li>Versions-Informationen hinzugefügt</li>
+            <li>Siegesanimation und Endkarte repariert</li>
+            <li>Konfetti-Animation für Dorfbewohner verbessert</li>
+            <li>Blut-Animation für Werwolf-Sieg zuverlässiger</li>
+            <li>RIP-Screen wird korrekt ausgeblendet bei Spielende</li>
+            <li>Neue Animations-Titel für eindeutigeres Spielende</li>
         </ul>
-        <p><strong>v1.1.0</strong>:</p>
+        <p><strong>v1.7.0</strong>:</p>
         <ul>
-            <li>Geisterflüstern für tote Spieler</li>
-            <li>Skip-Button für Abstimmungen</li>
-            <li>50% Mindestquote für Eliminierungen</li>
+            <li>Endkarte für alle Spieler sichtbar</li>
+            <li>Spieler können nach Spielende an neuer Runde teilnehmen</li>
+            <li>Fehlerbehebung beim Übergang zum Spielende</li>
         </ul>
-        <p><strong>v1.0.0</strong>:</p>
+        <p><strong>v1.6.0</strong>:</p>
         <ul>
-            <li>Grundlegendes Spiel implementiert</li>
-            <li>Tag- und Nachtphasen</li>
-            <li>Raumverwaltung</li>
+            <li>Siegesanimationen und Endkarte für alle Spieler</li>
+            <li>Konfetti-Animation für Dorfbewohner-Sieg</li>
+            <li>Blut-Animation für Werwolf-Sieg</li>
         </ul>
     </div>
 </div>
@@ -481,13 +469,10 @@
     let readyForNextGame = false;
     let amIDead = false;
 
-    // Initialisiere Chat-Nachrichten
     let deadChatMessages = [];
 
-    // Beim Laden verfügbare Räume abrufen
     fetchAvailableRooms();
 
-    // Periodisch Raumliste aktualisieren
     setInterval(fetchAvailableRooms, 5000);
 
     function fetchAvailableRooms() {
@@ -555,10 +540,8 @@
         const playerList = document.getElementById("playerList");
         playerList.textContent = players.map(p => p.name).join(", ");
 
-        // Spielerliste für spätere Verwendung speichern
         alivePlayers = players;
 
-        // Wartenachricht und Fortschrittsbalken aktualisieren
         updateWaitingMessage(players.length);
         const progress = (players.length / maxPlayersInRoom) * 100;
         document.getElementById("playerProgress").style.width = `${progress}%`;
@@ -577,9 +560,7 @@
         }
     }
 
-    // Animierte Rollenzuweisung
     socket.on("showRole", (role) => {
-        // Alle Ansichten verstecken, außer RIP-Bildschirm falls tot
         if (amIDead) return;
 
         document.getElementById("game").style.display = "none";
@@ -592,7 +573,6 @@
         roleText.className = "fw-bold animate-text";
         myRole = role;
 
-        // Animation: "Du..." -> "Du... bist..." -> "Du... bist... [Rolle]"
         let steps = [
             "Du...",
             "Du... bist...",
@@ -612,13 +592,11 @@
                     }, 300);
                 }, 1000);
             } else {
-                // Nach Animation: Rolle dauerhaft anzeigen
                 setTimeout(() => {
                     roleText.textContent = role;
                     setRoleColor(role);
                     roleText.className = "fw-bold";
 
-                    // Rollenbeschreibung anzeigen
                     const desc = document.getElementById("roleDescription");
                     if (role === "Werwolf") {
                         desc.textContent = "Deine Aufgabe: Wähle nachts mit den anderen Werwölfen ein Opfer. Verberge tagsüber deine Identität.";
@@ -642,9 +620,7 @@
         }
     }
 
-    // Nachtphase starten
     socket.on("startNight", () => {
-        // Tote Spieler sehen nur den RIP-Bildschirm
         if (amIDead) return;
 
         document.getElementById("roleDisplay").style.display = "none";
@@ -654,18 +630,15 @@
         document.body.classList.add("night-phase");
         document.body.classList.remove("day-phase");
 
-        // Werwolf-Voting vorbereiten
         if (myRole === "Werwolf") {
             document.getElementById("wolfVote").style.display = "block";
             document.getElementById("villagerNight").style.display = "none";
 
-            // Voting-Buttons erstellen
             const wolfVoteButtons = document.getElementById("wolfVoteButtons");
             wolfVoteButtons.innerHTML = "";
 
-            // Nur lebende Dorfbewohner als potenzielle Opfer anzeigen
             const livingVictims = alivePlayers.filter(player =>
-                player.id !== socket.id && // Sich selbst nicht anzeigen
+                player.id !== socket.id &&
                 player.role !== "Werwolf" &&
                 player.alive);
 
@@ -681,12 +654,9 @@
                     btn.textContent = player.name;
                     btn.dataset.player = player.id;
                     btn.onclick = function() {
-                        // Alle Buttons zurücksetzen
                         document.querySelectorAll(".vote-btn").forEach(b =>
                             b.classList.remove("selected"));
-                        // Diesen Button auswählen
                         this.classList.add("selected");
-                        // Vote an Server senden
                         wolfTarget = player.id;
                         socket.emit("wolfVote", { room, target: player.id });
                     };
@@ -699,26 +669,21 @@
         }
     });
 
-    // Werwolf-Votes aktualisieren (für alle Werwölfe)
     socket.on("updateWolfVotes", (votes) => {
         if (myRole !== "Werwolf" || amIDead) return;
 
-        // Alle Buttons zurücksetzen
         document.querySelectorAll(".vote-btn").forEach(btn =>
             btn.classList.remove("targeted"));
 
-        // Anzeigen, welche Spieler von anderen Werwölfen anvisiert werden
         for (const [wolfId, targetId] of Object.entries(votes)) {
-            if (wolfId !== socket.id) { // Nicht meine eigene Stimme
+            if (wolfId !== socket.id) {
                 const targetBtn = document.querySelector(`.vote-btn[data-player="${targetId}"]`);
                 if (targetBtn) targetBtn.classList.add("targeted");
             }
         }
     });
 
-    // Tod-Ankündigung
     socket.on("announceVictim", (victim) => {
-        // Auch tote Spieler sehen die Ankündigung, können aber nicht mehr abstimmen
         if (amIDead) return;
 
         document.getElementById("nightPhase").style.display = "none";
@@ -733,14 +698,11 @@
         deathText.classList.add("visible");
         victimName.classList.remove("visible");
 
-        // Nach einer Sekunde den Namen anzeigen
         setTimeout(() => {
             victimName.textContent = victim.name;
             victimName.classList.add("visible");
 
-            // Nach weiteren 3 Sekunden zur Tagphase übergehen
             setTimeout(() => {
-                // Wenn ich das Opfer bin, zeige RIP-Bildschirm
                 if (victim.id === socket.id) {
                     showRipScreen();
                 } else {
@@ -750,22 +712,17 @@
         }, 1000);
     });
 
-    // RIP-Bildschirm anzeigen für tote Spieler
     function showRipScreen() {
-        // Alle Spielansichten ausblenden
         document.querySelectorAll("#game, #roleDisplay, #nightPhase, #dayPhase, #deathAnnouncement").forEach(el => {
             el.style.display = "none";
         });
 
-        // RIP-Bildschirm anzeigen
         document.getElementById("ripScreen").style.display = "block";
         document.getElementById("gameStatus").textContent = "Verstorben";
         amIDead = true;
 
-        // Toten-Chat initialisieren
         document.getElementById("deadChat").innerHTML = "";
 
-        // Chat-Event-Listener hinzufügen (nur einmal)
         if (!document.getElementById("chatInput").hasAttribute("data-listener-added")) {
             document.getElementById("chatInput").addEventListener("keyup", function(event) {
                 if (event.key === "Enter") {
@@ -776,7 +733,6 @@
         }
     }
 
-    // Chat-Nachricht senden
     function sendDeadChat() {
         const input = document.getElementById("chatInput");
         const message = input.value.trim();
@@ -784,13 +740,9 @@
         if (message) {
             socket.emit("deadChat", { room, name, message });
             input.value = "";
-
-            // Keine lokale Nachricht mehr hinzufügen, um Duplikate zu vermeiden
-            // Die Nachricht kommt vom Server zurück
         }
     }
 
-    // Chat aktualisieren
     function updateDeadChat() {
         const chatContainer = document.getElementById("deadChat");
         let chatHtml = "";
@@ -812,18 +764,14 @@
         chatContainer.scrollTop = chatContainer.scrollHeight;
     }
 
-    // Neue Chat-Nachricht erhalten
     socket.on("deadChatMessage", (msg) => {
-        // Nur Nachrichten empfangen, wenn man tot ist
         if (!amIDead) return;
 
         deadChatMessages.push(msg);
         updateDeadChat();
     });
 
-    // Tagphase starten
     socket.on("startDay", (data) => {
-        // Tote Spieler sehen nur den RIP-Bildschirm
         if (amIDead) return;
 
         document.getElementById("deathAnnouncement").style.display = "none";
@@ -832,37 +780,29 @@
         document.body.classList.remove("night-phase");
         document.body.classList.add("day-phase");
 
-        // Abstimmungs-Status zurücksetzen
         myVote = null;
         document.getElementById("confirmVote").disabled = true;
         document.getElementById("confirmVote").textContent = "Stimme abgeben";
         document.getElementById("skipVoteBtn").classList.remove("selected");
         document.getElementById("skipVoteBtn").disabled = false;
 
-        // Voting-Buttons erstellen
         const dayVoteButtons = document.getElementById("dayVoteButtons");
         dayVoteButtons.innerHTML = "";
 
-        // Aktualisierte Spielerliste vom Server übernehmen
         if (data && data.alivePlayers) {
-            console.log("Erhaltene Spielerliste:", data.alivePlayers);
-            // Nur die alivePlayers mit den vom Server empfangenen Daten aktualisieren
             alivePlayers = data.alivePlayers;
         }
 
-        // Nur lebende Spieler anzeigen, die nicht ich selbst sind
         const livingPlayers = alivePlayers.filter(player =>
-            player.id !== socket.id && // Sich selbst ausschließen
-            player.alive === true);  // Explizit auf true prüfen
-
-        console.log("Gefilterte lebende Spieler:", livingPlayers);
+            player.id !== socket.id &&
+            player.alive === true);
 
         if (livingPlayers.length <= 1) {
             dayVoteButtons.innerHTML = `
                 <div class="alert alert-warning">
                     Nicht genügend Spieler für eine Abstimmung.
                 </div>`;
-            document.getElementById("skipVoteBtn").click(); // Automatisch Skip wählen
+            document.getElementById("skipVoteBtn").click();
         } else {
             livingPlayers.forEach(player => {
                 const btn = document.createElement("button");
@@ -870,35 +810,25 @@
                 btn.textContent = player.name;
                 btn.dataset.player = player.id;
                 btn.onclick = function() {
-                    // Alle Buttons zurücksetzen
                     document.querySelectorAll(".vote-btn").forEach(b =>
                         b.classList.remove("selected"));
                     document.getElementById("skipVoteBtn").classList.remove("selected");
-                    // Diesen Button auswählen
                     this.classList.add("selected");
-                    // Vote speichern
                     myVote = player.id;
-                    // Abstimm-Button aktivieren
                     document.getElementById("confirmVote").disabled = false;
                 };
                 dayVoteButtons.appendChild(btn);
             });
         }
 
-        // Skip-Button für Abstimmung
         document.getElementById("skipVoteBtn").onclick = function() {
-            // Alle Buttons zurücksetzen
             document.querySelectorAll(".vote-btn").forEach(b =>
                 b.classList.remove("selected"));
-            // Skip als Vote speichern
             myVote = "skip";
-            // Abstimm-Button aktivieren
             document.getElementById("confirmVote").disabled = false;
-            // Diesen Button hervorheben
             this.classList.add("selected");
         };
 
-        // Abstimm-Button
         document.getElementById("confirmVote").onclick = function() {
             if (myVote) {
                 socket.emit("dayVote", { room, target: myVote });
@@ -911,7 +841,6 @@
             }
         };
 
-        // Timer starten
         let timeLeft = 60;
         const timerElement = document.getElementById("votingTimer");
         const timer = setInterval(() => {
@@ -920,9 +849,7 @@
             if (timeLeft <= 0) {
                 clearInterval(timer);
                 timerElement.textContent = "Abstimmung beendet";
-                // Automatisch abstimmen, falls noch nicht getan
                 if (!document.getElementById("confirmVote").disabled) {
-                    // Automatisch Skip wählen, wenn keine Auswahl getroffen wurde
                     if (!myVote) {
                         myVote = "skip";
                     }
@@ -932,9 +859,7 @@
         }, 1000);
     });
 
-    // Niemand wurde getötet Benachrichtigung
     socket.on("noElimination", () => {
-        // Auch für tote Spieler anzeigen
         document.getElementById("nightPhase").style.display = "none";
         document.getElementById("dayPhase").style.display = "none";
 
@@ -952,12 +877,10 @@
         deathText.classList.add("visible");
         victimName.classList.remove("visible");
 
-        // Nach einer Sekunde die Nachricht anzeigen
         setTimeout(() => {
             victimName.textContent = "Heute ist niemand gestorben...";
             victimName.classList.add("visible");
 
-            // Nach weiteren 3 Sekunden weitergehen
             setTimeout(() => {
                 if (!amIDead) {
                     socket.emit("readyForNight", { room });
@@ -966,29 +889,24 @@
         }, 1000);
     });
 
-    // Spielende - Event-Handler korrigiert (doppelter Code entfernt)
     socket.on("gameOver", (result) => {
-        console.log("SPIEL BEENDET mit Gewinner:", result.winner);
+        console.log("SPIEL BEENDET: " + result.winner + " gewinnen!");
 
-        // Stoppe alle laufenden Timer
         for (let id in window) {
-            if (!isNaN(parseInt(id)) && window.hasOwnProperty(id)) {
-                clearTimeout(id);
-                clearInterval(id);
+            if (!isNaN(parseInt(id))) {
+                clearTimeout(parseInt(id));
+                clearInterval(parseInt(id));
             }
         }
 
-        // Alle UI-Elemente ausblenden, auch den RIP-Screen
         document.querySelectorAll("#nightPhase, #dayPhase, #deathAnnouncement, #ripScreen").forEach(el => {
             el.style.display = "none";
         });
 
         document.getElementById("gameStatus").textContent = "Spiel beendet - " + result.winner + " gewinnen";
 
-        // Sieganimation anzeigen (Blut oder Konfetti)
         playWinAnimation(result.winner);
 
-        // Nach Animation Spielergebnisse anzeigen
         setTimeout(() => {
             const gameDiv = document.getElementById("game");
             gameDiv.style.display = "block";
@@ -1035,7 +953,6 @@
                 </div>
             `;
 
-            // Bei toten Spielern Hinweis anzeigen aber Button nicht deaktivieren
             if (amIDead) {
                 document.getElementById("readyButton").classList.add("btn-outline-secondary");
                 document.getElementById("readyButton").classList.remove("ready-button");
@@ -1044,18 +961,113 @@
         }, 3500);
     });
 
+    function playWinAnimation(winner) {
+        console.log("Spiele Siegesanimation für: " + winner);
+
+        const animContainer = document.getElementById("winAnimation");
+        animContainer.innerHTML = "";
+        animContainer.style.display = "block";
+
+        if (winner === "Werwölfe") {
+            animContainer.className = "blood-animation";
+
+            const title = document.createElement("div");
+            title.className = "win-title";
+            title.style.textShadow = "0 0 10px #ff0000";
+            title.innerHTML = "DIE WERWÖLFE HABEN GEWONNEN!";
+            animContainer.appendChild(title);
+
+            for (let i = 0; i < 15; i++) {
+                const splash = document.createElement("div");
+                splash.className = "blood-splash";
+                splash.style.left = `${Math.random() * 80 + 10}%`;
+                splash.style.top = `${Math.random() * 80 + 10}%`;
+                const size = Math.random() * 150 + 50;
+                splash.style.width = `${size}px`;
+                splash.style.height = `${size}px`;
+                splash.style.transform = `rotate(${Math.random() * 360}deg)`;
+                splash.style.animation = `bloodSplash 2s ease-out ${Math.random() * 1.5}s forwards`;
+                animContainer.appendChild(splash);
+            }
+
+        } else {
+            animContainer.style.backgroundColor = "rgba(0, 170, 255, 0.1)";
+
+            const title = document.createElement("div");
+            title.className = "win-title";
+            title.style.textShadow = "0 0 10px #0099ff";
+            title.innerHTML = "DIE DORFBEWOHNER HABEN GEWONNEN!";
+            animContainer.appendChild(title);
+
+            const confettiContainer = document.createElement("div");
+            confettiContainer.className = "confetti-container";
+            animContainer.appendChild(confettiContainer);
+
+            for (let i = 0; i < 150; i++) {
+                createConfetti(confettiContainer);
+            }
+        }
+
+        setTimeout(() => {
+            animContainer.style.display = "none";
+            animContainer.innerHTML = "";
+            animContainer.className = "";
+        }, 3500);
+    }
+
+    function createConfetti(container) {
+        const confetti = document.createElement("div");
+        confetti.className = "confetti";
+
+        const colors = ["#f94144", "#f3722c", "#f8961e", "#f9c74f", "#90be6d", "#43aa8b", "#577590"];
+        confetti.style.backgroundColor = colors[Math.floor(Math.random() * colors.length)];
+
+        if (Math.random() > 0.5) {
+            confetti.style.borderRadius = "50%";
+        }
+
+        const startX = Math.random() * 100;
+        confetti.style.left = `${startX}%`;
+        confetti.style.top = "-10px";
+
+        const animDuration = Math.random() * 3 + 2;
+        const animDelay = Math.random() * 1.5;
+
+        confetti.style.animation = `
+            fallDown ${animDuration}s ease-in forwards,
+            sideMovement ${animDuration/2}s ease-in-out alternate infinite
+        `;
+        confetti.style.animationDelay = `${animDelay}s, ${animDelay}s`;
+
+        if (!document.getElementById('confetti-style')) {
+            const style = document.createElement('style');
+            style.id = 'confetti-style';
+            style.textContent = `
+                @keyframes fallDown {
+                    0% { transform: translateY(0) rotate(0deg); opacity: 0; }
+                    10% { opacity: 1; }
+                    100% { transform: translateY(${window.innerHeight}px) rotate(360deg); opacity: 0; }
+                }
+                @keyframes sideMovement {
+                    0% { transform: translateX(-10px); }
+                    100% { transform: translateX(10px); }
+                }
+            `;
+            document.head.appendChild(style);
+        }
+
+        container.appendChild(confetti);
+    }
+
     function playAgain() {
-        // Tote und lebende Spieler können teilnehmen
         readyForNextGame = true;
         socket.emit("playAgain", { room, name });
 
-        // Button-Zustand ändern
         const readyButton = document.getElementById("readyButton");
         readyButton.classList.add("active");
         readyButton.innerHTML = '<i class="bi bi-check-circle-fill"></i> Bereit!';
         readyButton.disabled = true;
 
-        // Wartebereich anzeigen
         const gameDiv = document.getElementById("game");
         gameDiv.innerHTML = `
             <div class="alert alert-success">
@@ -1071,31 +1083,6 @@
         document.getElementById("gameStatus").textContent = "Warte in Lobby";
     }
 
-    // Versionsinfo aktualisieren
-    document.getElementById('versionInfo').innerHTML = `
-        v1.7.0 <span class="toggle-details" onclick="toggleVersionDetails()">Details anzeigen</span>
-        <div id="versionDetails">
-            <p><strong>v1.7.0</strong> (aktuelle Version):</p>
-            <ul>
-                <li>Endkarte für alle Spieler sichtbar</li>
-                <li>Spieler können nach Spielende an neuer Runde teilnehmen</li>
-                <li>Fehlerbehebung beim Übergang zum Spielende</li>
-            </ul>
-            <p><strong>v1.6.0</strong>:</p>
-            <ul>
-                <li>Siegesanimationen und Endkarte für alle Spieler</li>
-                <li>Konfetti-Animation für Dorfbewohner-Sieg</li>
-                <li>Blut-Animation für Werwolf-Sieg</li>
-            </ul>
-            <p><strong>v1.5.0</strong>:</p>
-            <ul>
-                <li>Bugfixes für Spielende</li>
-                <li>Doppelte Eventhandler beseitigt</li>
-            </ul>
-        </div>
-    `;
-
-    // Versions-Details ein-/ausblenden
     function toggleVersionDetails() {
         const details = document.getElementById('versionDetails');
         const toggle = document.querySelector('.toggle-details');
