@@ -483,7 +483,8 @@ function startWitchStage(room) {
     if (witch) {
         r.nightStage = "witch";
         const victimPlayer = r.players.find(p => p.id === r.nightVictim);
-        const options = r.players.filter(p => p.alive).map(p => ({ id: p.id, name: p.name }));
+        // Hexe selbst nicht als Ziel für Gifttrank
+        const options = r.players.filter(p => p.alive && p.id !== witch.id).map(p => ({ id: p.id, name: p.name }));
         io.to(witch.id).emit("witchChoose", {
             victim: victimPlayer ? { id: victimPlayer.id, name: victimPlayer.name } : null,
             healUsed: r.witchHealUsed,
@@ -535,9 +536,8 @@ function finalizeNight(room) {
 
     if (deaths.length > 0) {
         r.phase = "announcement";
-        deaths.forEach(v => {
-            io.to(room).emit("announceVictim", { id: v.id, name: v.name });
-        });
+        // Sende alle Opfer als Liste
+        io.to(room).emit("announceVictim", deaths.map(v => ({ id: v.id, name: v.name })));
         const gameContinues = !checkGameStatus(room);
         if (gameContinues) {
             deaths.forEach(v => {

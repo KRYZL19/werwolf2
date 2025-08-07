@@ -424,6 +424,25 @@
             right: 20px;
             z-index: 3000;
         }
+
+        .heal-btn.selected {
+            filter: brightness(0.7);
+            box-shadow: 0 0 8px 2px #28a745 inset;
+            position: relative;
+        }
+        .heal-icon {
+            margin-right: 6px;
+            vertical-align: middle;
+        }
+        .poison-btn.selected {
+            filter: brightness(0.7);
+            box-shadow: 0 0 8px 2px purple inset;
+            position: relative;
+        }
+        .poison-icon {
+            margin-right: 6px;
+            vertical-align: middle;
+        }
     </style>
 </head>
 <body>
@@ -439,7 +458,7 @@
 
     <div class="lobby-row mb-2">
         <div class="form-group">
-            <label class="form-label">Anzahl Spieler</label>
+            <label class="form-label">Spieler</label>
             <select id="maxPlayers" class="form-select" onchange="updateWolfOptions()">
                 <option value="5">5</option>
                 <option value="6">6</option>
@@ -543,7 +562,7 @@
 
 <div id="deathAnnouncement" class="card p-3 shadow-sm mt-3 text-center">
     <h3 id="deathText" class="animate-text">Gestorben ist...</h3>
-    <h2 id="victimName" class="fw-bold animate-text mt-3"></h2>
+    <div id="victimList"></div>
 </div>
 
 <div id="dayPhase" class="card p-3 shadow-sm mt-3">
@@ -1020,10 +1039,12 @@
         actions.innerHTML = "";
         let heal = false;
         let poison = null;
+
+        // Heiltrank
         if (!healUsed && victim) {
             const healBtn = document.createElement("button");
-            healBtn.className = "btn btn-success";
-            healBtn.textContent = "Heilen";
+            healBtn.className = "btn btn-success heal-btn";
+            healBtn.innerHTML = `<span class="heal-icon">🧪</span>Heilen`;
             healBtn.onclick = function() {
                 if (heal) {
                     heal = false;
@@ -1037,25 +1058,24 @@
             };
             actions.appendChild(healBtn);
         }
+
+        // Gifttrank (andere Spieler, aber nicht sich selbst)
         if (!poisonUsed) {
-            players.forEach(player => {
+            players.filter(player => player.id !== socket.id).forEach(player => {
                 const btn = document.createElement("button");
-                btn.className = "btn witch-poison-btn vote-btn";
-                btn.textContent = player.name;
-                if (player.id === socket.id) {
-                    btn.disabled = true;
-                    btn.classList.add("current-player");
-                } else {
-                    btn.onclick = function() {
-                        document.querySelectorAll("#witchActions .btn").forEach(b => b.classList.remove("selected"));
-                        poison = player.id;
-                        heal = false;
-                        btn.classList.add("selected");
-                    };
-                }
+                btn.className = "btn witch-poison-btn poison-btn vote-btn";
+                btn.innerHTML = `<span class="poison-icon">☠️</span>${player.name}`;
+                btn.onclick = function() {
+                    document.querySelectorAll("#witchActions .btn").forEach(b => b.classList.remove("selected"));
+                    poison = player.id;
+                    heal = false;
+                    btn.classList.add("selected");
+                };
                 actions.appendChild(btn);
             });
         }
+
+        // Skip-Button
         const skipBtn = document.createElement("button");
         skipBtn.className = "btn btn-secondary";
         skipBtn.textContent = "Nichts tun";
@@ -1066,6 +1086,7 @@
             skipBtn.classList.add("selected");
         };
         actions.appendChild(skipBtn);
+
         document.getElementById("witchConfirm").onclick = function() {
             socket.emit("witchDecision", { room, heal, poison });
             div.style.display = "none";
@@ -1073,7 +1094,8 @@
         };
     });
 
-    socket.on("announceVictim", (victim) => {
+    // Mehrere Opfer in der Nacht anzeigen
+    socket.on("announceVictim", (victims) => {
         if (amIDead) return;
 
         document.getElementById("nightPhase").style.display = "none";
@@ -1081,25 +1103,43 @@
         document.getElementById("gameStatus").textContent = "Morgengrauen";
 
         const deathText = document.getElementById("deathText");
-        const victimName = document.getElementById("victimName");
+        const victimList = document.getElementById("victimList");
 
-        deathText.textContent = "Gestorben ist...";
-        victimName.textContent = "";
-        deathText.classList.add("visible");
-        victimName.classList.remove("visible");
+        deathText.textContent = "Gestorben sind...";
+        victimList.innerHTML = "";
+
+        if (Array.isArray(victims) && victims.length > 0) {
+            victims.forEach(v => {
+                const el = document.createElement("div");
+                el.className = "fw-bold animate-text";
+                el.textContent = v.name;
+                victimList.appendChild(el);
+            });
+        } else if (victims && victims.name) {
+            // Fallback für Einzelopfer
+            const el = document.createElement("div");
+            el.className = "fw-bold animate-text";
+            el.textContent = victims.name;
+            victimList.appendChild(el);
+        } else {
+            victimList.innerHTML = "<div class='fw-bold animate-text'>Niemand</div>";
+        }
 
         setTimeout(() => {
-            victimName.textContent = victim.name;
-            victimName.classList.add("visible");
-
-            setTimeout(() => {
-                if (victim.id === socket.id) {
+            if (Array.isArray(victims)) {
+                if (victims.some(v => v.id === socket.id)) {
                     showRipScreen();
                 } else {
                     socket.emit("readyForDay", { room });
                 }
-            }, 3000);
-        }, 1000);
+            } else {
+                if (victims.id === socket.id) {
+                    showRipScreen();
+                } else {
+                    socket.emit("readyForDay", { room });
+                }
+            }
+        }, 3000);
     });
 
     socket.on("playerEliminated", (playerId) => {
