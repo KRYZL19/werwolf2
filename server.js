@@ -12,6 +12,10 @@ app.use(express.static(__dirname + "/public"));
 
 let rooms = {};
 
+function displayRole(role) {
+    return role === "Werwolf" ? "Werwolf" : "Dorfbewohner";
+}
+
 io.on("connection", (socket) => {
     // Verfügbare Räume abrufen
     socket.on("getAvailableRooms", () => {
@@ -41,7 +45,7 @@ io.on("connection", (socket) => {
 
             rooms[room] = {
                 host: socket.id,
-                players: [{ id: socket.id, name, role: null, alive: true }],
+                players: [{ id: socket.id, name, role: null, alive: true, lover: null }],
                 wolves,
                 maxPlayers,
                 started: false,
@@ -49,7 +53,14 @@ io.on("connection", (socket) => {
                 wolfVotes: {},
                 dayVotes: {},
                 victims: [],
-                readyForNextGame: []
+                readyForNextGame: [],
+                lovers: [],
+                night: 0,
+                witchHealUsed: false,
+                witchPoisonUsed: false,
+                nightVictim: null,
+                poisonVictim: null,
+                nightStage: null
             };
 
             socket.join(room);
@@ -90,7 +101,7 @@ io.on("connection", (socket) => {
                 return;
             }
 
-            r.players.push({ id: socket.id, name, role: null, alive: true });
+            r.players.push({ id: socket.id, name, role: null, alive: true, lover: null });
             socket.join(room);
             socket.data.room = room;
 
@@ -146,52 +157,103 @@ io.on("connection", (socket) => {
         }
     });
 
+    socket.on("amorSelected", ({ room, first, second }) => {
+        try {
+            const r = rooms[room];
+            if (!r || r.phase !== "night" || r.nightStage !== "amor") return;
+            const amor = r.players.find(p => p.id === socket.id);
+            if (!amor || amor.role !== "Amor" || !amor.alive) return;
+
+            if (first === socket.id || second === socket.id || first === second) return;
+            const p1 = r.players.find(p => p.id === first && p.alive);
+            const p2 = r.players.find(p => p.id === second && p.alive);
+            if (!p1 || !p2) return;
+
+            r.lovers = [p1.id, p2.id];
+            p1.lover = p2.id;
+            p2.lover = p1.id;
+
+            io.to(p1.id).emit("loverAssigned", { name: p2.name });
+            io.to(p2.id).emit("loverAssigned", { name: p1.name });
+
+            r.nightStage = null;
+            nextNightStage(room);
+        } catch (error) {
+            console.error("Fehler bei Amor-Auswahl:", error);
+        }
+    });
+
+    socket.on("seerSelection", ({ room, target }) => {
+        try {
+            const r = rooms[room];
+            if (!r || r.phase !== "night" || r.nightStage !== "seer") return;
+            const seer = r.players.find(p => p.id === socket.id);
+            if (!seer || seer.role !== "Seher" || !seer.alive) return;
+
+            const targetPlayer = r.players.find(p => p.id === target);
+            if (!targetPlayer || !targetPlayer.alive) return;
+
+            io.to(seer.id).emit("seerResult", {
+                name: targetPlayer.name,
+                isWolf: targetPlayer.role === "Werwolf"
+            });
+
+            startWolfStage(room);
+        } catch (error) {
+            console.error("Fehler bei der Seher-Aktion:", error);
+        }
+    });
+
+    socket.on("witchDecision", ({ room, heal, poison }) => {
+        try {
+            const r = rooms[room];
+            if (!r || r.phase !== "night" || r.nightStage !== "witch") return;
+            const witch = r.players.find(p => p.id === socket.id);
+            if (!witch || witch.role !== "Hexe" || !witch.alive) return;
+
+            if (heal && !r.witchHealUsed && r.nightVictim) {
+                r.witchHealUsed = true;
+                r.nightVictim = null;
+            }
+
+            if (poison && !r.witchPoisonUsed) {
+                const targetPlayer = r.players.find(p => p.id === poison && p.alive);
+                if (targetPlayer) {
+                    r.witchPoisonUsed = true;
+                    r.poisonVictim = targetPlayer.id;
+                }
+            }
+
+            finalizeNight(room);
+        } catch (error) {
+            console.error("Fehler bei der Hexen-Aktion:", error);
+        }
+    });
+
     socket.on("wolfVote", ({ room, target }) => {
         try {
             const r = rooms[room];
-            if (!r || r.phase !== "night") return;
+            if (!r || r.phase !== "night" || r.nightStage !== "wolves") return;
 
             const player = r.players.find(p => p.id === socket.id);
             if (!player || player.role !== "Werwolf" || !player.alive) return;
 
-            // Vote speichern
             r.wolfVotes[socket.id] = target;
 
-            // Allen Werwölfen die aktuellen Votes übermitteln
             const wolves = r.players.filter(p => p.role === "Werwolf" && p.alive);
             wolves.forEach(wolf => {
                 io.to(wolf.id).emit("updateWolfVotes", r.wolfVotes);
             });
 
-            // Prüfen, ob alle Werwölfe abgestimmt haben und das gleiche Ziel haben
             const allWolvesVoted = wolves.every(wolf => r.wolfVotes[wolf.id]);
             if (allWolvesVoted) {
                 const votes = Object.values(r.wolfVotes);
                 const allSameTarget = votes.every(v => v === votes[0]);
 
                 if (allSameTarget) {
-                    // Opfer festlegen und zur Tagesphase übergehen
-                    const victim = r.players.find(p => p.id === votes[0]);
-                    if (victim) {
-                        victim.alive = false;
-                        r.victims.push(victim);
-
-                        // Phase auf "announcement" setzen
-                        r.phase = "announcement";
-
-                        // Allen Spielern das Opfer mitteilen
-                        io.to(room).emit("announceVictim", {
-                            id: victim.id,
-                            name: victim.name
-                        });
-
-                        // Spielstatus prüfen – nur RIP senden, wenn das Spiel weitergeht
-                        const gameContinues = !checkGameStatus(room);
-                        if (gameContinues) {
-                            // Benachrichtigung an das Opfer senden
-                            io.to(victim.id).emit("playerEliminated", victim.id);
-                        }
-                    }
+                    r.nightVictim = votes[0];
+                    r.wolfVotes = {};
+                    startWitchStage(room);
                 }
             }
         } catch (error) {
@@ -212,7 +274,7 @@ io.on("connection", (socket) => {
             const alivePlayers = r.players.filter(p => p.alive).map(p => ({
                 id: p.id,
                 name: p.name,
-                role: p.role,
+                role: displayRole(p.role),
                 alive: true // Explizit nochmal setzen
             }));
 
@@ -312,21 +374,30 @@ function startGame(room) {
 
         const shuffled = [...r.players].sort(() => Math.random() - 0.5);
 
+        r.lovers = [];
+        r.night = 0;
+        r.witchHealUsed = false;
+        r.witchPoisonUsed = false;
+
         // Rollen zuweisen
         // Benutze die eingestellte Werwolfanzahl, begrenzt auf maximal die Hälfte der Spieler
         const wolfCount = Math.min(r.wolves, Math.floor(r.players.length / 2));
         console.log(`Starte Spiel mit ${wolfCount} Werwölfen von ${r.wolves} eingestellten.`);
 
         for (let i = 0; i < shuffled.length; i++) {
-            // Zuerst die angegebene Anzahl Werwölfe zuweisen
             if (i < wolfCount) {
                 shuffled[i].role = "Werwolf";
             } else {
-                // Dann den Rest mit Dorfbewohnern auffüllen
                 shuffled[i].role = "Dorfbewohner";
             }
             shuffled[i].alive = true;
+            shuffled[i].lover = null;
         }
+
+        const villagers = shuffled.filter(p => p.role === "Dorfbewohner");
+        if (villagers[0]) villagers[0].role = "Amor";
+        if (villagers[1]) villagers[1].role = "Seher";
+        if (villagers[2]) villagers[2].role = "Hexe";
 
         for (const player of shuffled) {
             io.to(player.id).emit("showRole", player.role);
@@ -337,7 +408,7 @@ function startGame(room) {
             id: p.id,
             name: p.name,
             alive: p.alive,
-            role: p.role
+            role: displayRole(p.role)
         })));
 
         // Nach 10 Sekunden die erste Nachtphase starten
@@ -353,21 +424,146 @@ function startNightPhase(room) {
         if (!r) return;
 
         r.phase = "night";
+        r.night += 1;
         r.wolfVotes = {};
+        r.nightVictim = null;
+        r.poisonVictim = null;
+        r.nightStage = null;
 
         // Aktualisierte Spielerliste mit Rollen und Lebensstatus senden
         const updatedPlayerList = r.players.map(p => ({
             id: p.id,
             name: p.name,
             alive: p.alive,
-            role: p.role
+            role: displayRole(p.role)
         }));
 
         io.to(room).emit("updatePlayerList", updatedPlayerList);
         io.to(room).emit("startNight");
+
+        nextNightStage(room);
     } catch (error) {
         console.error("Fehler beim Starten der Nachtphase:", error);
     }
+}
+
+function nextNightStage(room) {
+    const r = rooms[room];
+    if (!r) return;
+
+    if (r.night === 1 && r.lovers.length === 0) {
+        const amor = r.players.find(p => p.role === "Amor" && p.alive);
+        if (amor) {
+            r.nightStage = "amor";
+            const options = r.players.filter(p => p.id !== amor.id && p.alive).map(p => ({ id: p.id, name: p.name }));
+            io.to(amor.id).emit("amorChoose", options);
+            return;
+        }
+    }
+
+    const seer = r.players.find(p => p.role === "Seher" && p.alive);
+    if (seer) {
+        r.nightStage = "seer";
+        const options = r.players.filter(p => p.id !== seer.id && p.alive).map(p => ({ id: p.id, name: p.name }));
+        io.to(seer.id).emit("seerChoose", options);
+        return;
+    }
+
+    startWolfStage(room);
+}
+
+function startWitchStage(room) {
+    const r = rooms[room];
+    const witch = r.players.find(p => p.role === "Hexe" && p.alive);
+    if (witch) {
+        r.nightStage = "witch";
+        const victimPlayer = r.players.find(p => p.id === r.nightVictim);
+        const options = r.players.filter(p => p.alive && p.id !== witch.id).map(p => ({ id: p.id, name: p.name }));
+        io.to(witch.id).emit("witchChoose", {
+            victim: victimPlayer ? { id: victimPlayer.id, name: victimPlayer.name } : null,
+            healUsed: r.witchHealUsed,
+            poisonUsed: r.witchPoisonUsed,
+            players: options
+        });
+    } else {
+        finalizeNight(room);
+    }
+}
+
+function startWolfStage(room) {
+    const r = rooms[room];
+    const wolves = r.players.filter(p => p.role === "Werwolf" && p.alive);
+    if (wolves.length > 0) {
+        r.nightStage = "wolves";
+        wolves.forEach(w => io.to(w.id).emit("startWolfVote"));
+    } else {
+        startWitchStage(room);
+    }
+}
+
+function finalizeNight(room) {
+    const r = rooms[room];
+    if (!r) return;
+    const deaths = [];
+
+    if (r.nightVictim) {
+        const victim = r.players.find(p => p.id === r.nightVictim);
+        if (victim && victim.alive) {
+            victim.alive = false;
+            deaths.push(victim);
+        }
+    }
+
+    if (r.poisonVictim) {
+        const poisoned = r.players.find(p => p.id === r.poisonVictim);
+        if (poisoned && poisoned.alive) {
+            poisoned.alive = false;
+            deaths.push(poisoned);
+        }
+    }
+
+    // Liebestod prüfen
+    const loverDeaths = checkLoverDeaths(room, deaths);
+    deaths.push(...loverDeaths);
+
+    deaths.forEach(v => r.victims.push(v));
+
+    if (deaths.length > 0) {
+        r.phase = "announcement";
+        deaths.forEach(v => {
+            io.to(room).emit("announceVictim", { id: v.id, name: v.name });
+        });
+        const gameContinues = !checkGameStatus(room);
+        if (gameContinues) {
+            deaths.forEach(v => {
+                io.to(v.id).emit("playerEliminated", v.id);
+            });
+        }
+    } else {
+        r.phase = "announcement";
+        io.to(room).emit("announceVictim", { id: null, name: "Niemand" });
+        checkGameStatus(room);
+    }
+}
+
+function checkLoverDeaths(room, currentDeaths = []) {
+    const r = rooms[room];
+    if (!r || r.lovers.length !== 2) return [];
+    const [id1, id2] = r.lovers;
+    const lover1 = r.players.find(p => p.id === id1);
+    const lover2 = r.players.find(p => p.id === id2);
+    const deaths = [];
+    if (lover1 && lover2) {
+        if (!lover1.alive && lover2.alive && !currentDeaths.includes(lover2)) {
+            lover2.alive = false;
+            deaths.push(lover2);
+        }
+        if (!lover2.alive && lover1.alive && !currentDeaths.includes(lover1)) {
+            lover1.alive = false;
+            deaths.push(lover1);
+        }
+    }
+    return deaths;
 }
 
 function endDayPhase(room) {
@@ -417,11 +613,19 @@ function endDayPhase(room) {
                 victim.alive = false;
                 r.victims.push(victim);
 
+                const loverDeaths = checkLoverDeaths(room, [victim]);
+                loverDeaths.forEach(ld => {
+                    r.victims.push(ld);
+                });
+
                 // Allen Spielern das Opfer mitteilen
                 io.to(room).emit("announceVictim", {
                     id: victim.id,
                     name: victim.name,
                     votes: maxVotes
+                });
+                loverDeaths.forEach(ld => {
+                    io.to(room).emit("announceVictim", { id: ld.id, name: ld.name });
                 });
 
                 // Spielstatus prüfen – RIP nur senden, wenn das Spiel weitergeht
@@ -429,15 +633,18 @@ function endDayPhase(room) {
                     return; // Spiel ist vorbei
                 }
 
-                // Benachrichtigung an das Opfer senden
+                // Benachrichtigungen an Opfer
                 io.to(victim.id).emit("playerEliminated", victim.id);
+                loverDeaths.forEach(ld => {
+                    io.to(ld.id).emit("playerEliminated", ld.id);
+                });
 
                 // Aktualisierte Spielerliste senden
                 io.to(room).emit("updatePlayerList", r.players.map(p => ({
                     id: p.id,
                     name: p.name,
                     alive: p.alive,
-                    role: p.role
+                    role: displayRole(p.role)
                 })));
 
                 // Nach 5 Sekunden die nächste Nachtphase starten
@@ -461,7 +668,7 @@ function checkGameStatus(room) {
         if (!r) return false;
 
         const wolves = r.players.filter(p => p.role === "Werwolf" && p.alive);
-        const villagers = r.players.filter(p => p.role === "Dorfbewohner" && p.alive);
+        const villagers = r.players.filter(p => p.role !== "Werwolf" && p.alive);
 
         console.log(`Prüfe Spielstatus: ${wolves.length} Werwölfe vs ${villagers.length} Dorfbewohner`);
 
@@ -519,10 +726,10 @@ function endGame(room, winner) {
         const sortedPlayers = r.players.map(p => ({
             id: p.id,
             name: p.name,
-            role: p.role,
+            role: displayRole(p.role),
             alive: p.alive,
             isWinner: (p.role === "Werwolf" && winner === "Werwölfe") ||
-                (p.role === "Dorfbewohner" && winner === "Dorfbewohner")
+                (p.role !== "Werwolf" && winner === "Dorfbewohner")
         })).sort((a, b) => {
             // Gewinner zuerst
             if (a.isWinner && !b.isWinner) return -1;
