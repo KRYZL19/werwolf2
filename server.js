@@ -554,10 +554,16 @@ function endGame(room, winner) {
             }
         }
 
-        // Räume aufräumen aber den Raum noch nicht löschen
+        // Räume aufräumen und den Raum nach kurzer Verzögerung löschen
         r.wolfVotes = {};
         r.dayVotes = {};
         r.readyForNextGame = [];
+
+        // Nach 10 Sekunden den Raum komplett löschen
+        setTimeout(() => {
+            console.log(`Raum ${room} wird gelöscht.`);
+            delete rooms[room];
+        }, 10000);
 
         return true;
     } catch (error) {

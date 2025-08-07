@@ -431,9 +431,16 @@
 <div id="winAnimation"></div>
 
 <div id="versionInfo">
-    v1.8.0 <span class="toggle-details" onclick="toggleVersionDetails()">Details anzeigen</span>
+    v1.9.0 <span class="toggle-details" onclick="toggleVersionDetails()">Details anzeigen</span>
     <div id="versionDetails">
-        <p><strong>v1.8.0</strong> (aktuelle Version):</p>
+        <p><strong>v1.9.0</strong> (aktuelle Version):</p>
+        <ul>
+            <li>Bugfix: Der letzte getötete Spieler sieht jetzt die Siegesanimation und Endkarte</li>
+            <li>Bugfix: Siegesanimation erscheint jetzt sofort bei Spielende</li>
+            <li>Verbesserung: Lobbies werden nach Spielende automatisch gelöscht</li>
+            <li>RIP-Screen wird bei Spielende korrekt ausgeblendet</li>
+        </ul>
+        <p><strong>v1.8.0</strong>:</p>
         <ul>
             <li>Siegesanimation und Endkarte repariert</li>
             <li>Konfetti-Animation für Dorfbewohner verbessert</li>
@@ -712,6 +719,12 @@
         }, 1000);
     });
 
+    socket.on("playerEliminated", (playerId) => {
+        if (playerId === socket.id) {
+            showRipScreen();
+        }
+    });
+
     function showRipScreen() {
         document.querySelectorAll("#game, #roleDisplay, #nightPhase, #dayPhase, #deathAnnouncement").forEach(el => {
             el.style.display = "none";
@@ -892,6 +905,7 @@
     socket.on("gameOver", (result) => {
         console.log("SPIEL BEENDET: " + result.winner + " gewinnen!");
 
+        // Alle Timeouts und Intervalle stoppen
         for (let id in window) {
             if (!isNaN(parseInt(id))) {
                 clearTimeout(parseInt(id));
@@ -906,8 +920,10 @@
 
         document.getElementById("gameStatus").textContent = "Spiel beendet - " + result.winner + " gewinnen";
 
+        // Siegesanimation sofort abspielen
         playWinAnimation(result.winner);
 
+        // Nach der Animation die Ergebniskarte anzeigen
         setTimeout(() => {
             const gameDiv = document.getElementById("game");
             gameDiv.style.display = "block";
