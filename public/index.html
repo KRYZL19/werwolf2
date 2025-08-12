@@ -762,22 +762,9 @@
         roomsContainer.innerHTML = roomsHtml;
     });
 
-    // Zufällige Zeichen zum Namen hinzufügen
-    function generateRandomChars() {
-        const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
-        let result = '';
-        for (let i = 0; i < 2; i++) {
-            result += chars.charAt(Math.floor(Math.random() * chars.length));
-        }
-        return result;
-    }
-
     function createRoom() {
-        name = document.getElementById("name").value;
-        if (name.trim() !== "") {
-            // Zwei zufällige Zeichen hinzufügen
-            name = name + " " + generateRandomChars();
-        }
+        name = document.getElementById("name").value.trim();
+        if (!name) return alert("Name und Raum-ID eingeben!");
 
         room = document.getElementById("room").value;
         const wolves = parseInt(document.getElementById("wolves").value);
@@ -789,7 +776,7 @@
 
         if (!name || !room) return alert("Name und Raum-ID eingeben!");
 
-        // Namen speichern (ohne die zufälligen Zeichen)
+        // Namen speichern
         saveName();
 
         socket.emit("createRoom", { name, room, wolves, maxPlayers, witch, amor, seer });
@@ -806,11 +793,10 @@
             return;
         }
 
-        // Zwei zufällige Zeichen hinzufügen
-        name = nameInput + " " + generateRandomChars();
+        name = nameInput;
         room = roomId;
 
-        // Namen speichern (ohne die zufälligen Zeichen)
+        // Namen speichern
         saveName();
 
         // Direkt beitreten ohne auf den Button zu klicken
